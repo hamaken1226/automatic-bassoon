@@ -26,7 +26,7 @@ drive_service = build('drive', 'v3', credentials=creds)
 
 # --- 2. 保存先の設定（★ここを自分のものに変更してください） ---
 SHEET_NAME = "English_AI_Logs" # スプレッドシートの名前
-DRIVE_FOLDER_ID = "1Q61NT7q7gSTd6gqmykyO46DBiU9KR5IU" # 例: "1A2b3C4d5E6f7G8h9I0j..."
+DRIVE_FOLDER_ID = "1Q61NT7q7gSTd6gqmykyO46DBiU9KR5IU"
 
 # --- 3. アプリの設定 ---
 st.set_page_config(page_title="English Level Checker", layout="centered")
