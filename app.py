@@ -35,12 +35,11 @@ BUCKET_NAME = "kentaengspeakingtest202605131619" # 例: "hamaguchi-thesis-audio"
 st.set_page_config(page_title="English Level Checker", layout="centered")
 st.title("🎓 英語レベル・化石化診断テスト")
 
+# 状態管理の初期化（attempt という「録音回数カウンター」を追加します）
 if 'step' not in st.session_state:
     st.session_state.step = 0
     st.session_state.results = []
-
-def move_to_next():
-    st.session_state.step += 1
+    st.session_state.attempt = 0 
 
 # サイドバー設定
 with st.sidebar:
@@ -49,6 +48,7 @@ with st.sidebar:
     if st.button("テストを最初からやり直す"):
         st.session_state.step = 0
         st.session_state.results = []
+        st.session_state.attempt = 0
         st.rerun()
 
 # --- 4. 質問リスト ---
@@ -69,11 +69,6 @@ QUESTIONS = [
 if st.session_state.step < len(QUESTIONS):
     current_q = QUESTIONS[st.session_state.step]
     
-    # ここからデバッグ表示
-    st.info(f"🗝️ 現在のAIアドレス: {gcp_info['client_email']}")
-    st.info(f"🏢 現在のプロジェクト: {gcp_info['project_id']}")
-    # ここまで
-
     st.subheader(f"第 {st.session_state.step + 1} 問 / {len(QUESTIONS)}")
     
     if current_q["type"] == "TRANS":
@@ -81,14 +76,26 @@ if st.session_state.step < len(QUESTIONS):
     else:
         st.info(f"**自由にお答えください：**\n\n {current_q['q']}")
 
+    # keyに attempt を入れることで、やり直すたびにウィジェットが新品にリセットされます
     audio_data = mic_recorder(
         start_prompt=f"第{st.session_state.step + 1}問 録音開始 🎙️",
         stop_prompt="録音停止 ⏹️",
-        key=f'recorder_{st.session_state.step}'
+        key=f"recorder_{st.session_state.step}_{st.session_state.attempt}"
     )
 
+    # 録音が終わったあとの確認画面
     if audio_data:
-        if len(st.session_state.results) <= st.session_state.step:
+        st.write("▼ 録音した音声を確認できます")
+        st.audio(audio_data['bytes']) 
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            submit_btn = st.button("✅ この音声で提出する", type="primary", use_container_width=True)
+        with col2:
+            retry_btn = st.button("🔄 録音し直す", use_container_width=True)
+            
+        # 提出ボタンが押されたときの処理
+        if submit_btn:
             with st.spinner("音声を処理・保存中..."):
                 timestamp = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
                 file_name = f"{user_id}_Q{st.session_state.step+1}_{timestamp.replace('/','').replace(':','').replace(' ','_')}.wav"
@@ -102,7 +109,7 @@ if st.session_state.step < len(QUESTIONS):
                         file=audio_file
                     )
                 
-                # ② Google Cloud Storageに音声をアップロード (★ここが変わりました！)
+                # ② Google Cloud Storageに音声をアップロード
                 bucket = storage_client.bucket(BUCKET_NAME)
                 blob = bucket.blob(file_name)
                 blob.upload_from_string(audio_bytes, content_type='audio/wav')
@@ -116,11 +123,16 @@ if st.session_state.step < len(QUESTIONS):
                     "type": current_q['type'],
                     "answer": transcript.text
                 })
-        
-        st.success(f"回答を記録しました： {st.session_state.results[st.session_state.step]['answer']}")
-        st.button("次の問題へ進む ➡️", on_click=move_to_next)
+                
+                # 次のステップへ進み、録音回数をリセット
+                st.session_state.step += 1
+                st.session_state.attempt = 0
+                st.rerun()
 
-    current_q = QUESTIONS[st.session_state.step]
+        # やり直しボタンが押されたときの処理
+        if retry_btn:
+            st.session_state.attempt += 1 # 回数を増やすことで録音ウィジェットを強制リセット
+            st.rerun()
 
 # --- 6. 最終診断 ---
 else:
