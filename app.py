@@ -44,3 +44,5 @@ def get_user_history(user_id):
 # --- メインロジック（ここにこれまでの10問テストのコードを入れる） ---
 # st.session_state でステップ管理
 # 録音が終わるたびに save_log_to_sheets() を呼び出す
+
+st.write("もしこの文字が見えたら、大成功です！！")
