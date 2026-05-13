@@ -16,7 +16,11 @@ gcp_info["private_key"] = gcp_info["private_key"].replace("\\n", "\n")
 client = OpenAI(api_key=api_key)
 
 # スプレッドシート用の認証
-scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+scopes = [
+    "https://www.googleapis.com/auth/spreadsheets", 
+    "https://www.googleapis.com/auth/drive",
+    "https://www.googleapis.com/auth/cloud-platform" 
+]
 creds = service_account.Credentials.from_service_account_info(gcp_info, scopes=scopes)
 gc = gspread.authorize(creds)
 
