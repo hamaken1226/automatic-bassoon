@@ -118,7 +118,7 @@ if st.session_state.step < len(QUESTIONS):
 
 current_q = QUESTIONS[st.session_state.step]
 
-    st.subheader(f"第 {st.session_state.step + 1} 問 / {len(QUESTIONS)}")
+st.subheader(f"第 {st.session_state.step + 1} 問 / {len(QUESTIONS)}")
 
 # --- 6. 最終診断 ---
 else:
