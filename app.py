@@ -73,8 +73,6 @@ if st.session_state.step < len(QUESTIONS):
     st.subheader(f"第 {st.session_state.step + 1} 問 / {len(QUESTIONS)}")
     
     if current_q["type"] == "TRANS":
-    
-    if current_q["type"] == "TRANS":
         st.warning(f"**指定フレーズを英語に直してください：**\n\n {current_q['q']}")
     else:
         st.info(f"**自由にお答えください：**\n\n {current_q['q']}")
