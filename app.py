@@ -1,12 +1,15 @@
 import streamlit as st
-from openai import OpenAI
+from audio_recorder_streamlit import audio_recorder
+import openai
+from google.cloud import storage
 import gspread
 from google.oauth2 import service_account
-from google.cloud import storage
-import io
-import json
 from datetime import datetime
-from streamlit_mic_recorder import mic_recorder
+import io
+
+import json
+import pandas as pd
+import plotly.express as px
 
 # --- 1. 認証設定（ここは変更なし！今の鍵がそのまま使えます） ---
 api_key = st.secrets["OPENAI_API_KEY"]
