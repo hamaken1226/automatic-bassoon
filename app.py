@@ -49,6 +49,10 @@ if 'attempt' not in st.session_state:
 with st.sidebar:
     st.header("⚙️ 実験管理")
     user_id = st.text_input("被験者ID", value="P001")
+    
+    # 👇 新しく「セット選択」のプルダウンを追加！
+    selected_set = st.selectbox("テストセットを選択", ["Set A", "Set B", "Set C", "Set D"])
+    
     if st.button("テストを最初からやり直す"):
         st.session_state.step = 0
         st.session_state.results = []
@@ -56,18 +60,59 @@ with st.sidebar:
         st.rerun()
 
 # --- 4. 質問リスト ---
-QUESTIONS = [
-    {"type": "TRANS", "q": "「昨日、友達と映画を見に行きました。」を英語にしてください。"},
-    {"type": "TRANS", "q": "「私は3年間、ずっと英語を勉強しています。」を英語にしてください。"},
-    {"type": "TRANS", "q": "「もし明日晴れたら、公園に行きたいです。」を英語にしてください。"},
-    {"type": "TRANS", "q": "「これは、私が先週買った本です。」を英語にしてください。"},
-    {"type": "TRANS", "q": "「コーヒーを飲むことと、本を読むことが好きです。」を英語にしてください。"},
-    {"type": "FREE", "q": "Please introduce yourself in detail."},
-    {"type": "FREE", "q": "What is your favorite food and why?"},
-    {"type": "FREE", "q": "What did you do last weekend?"},
-    {"type": "FREE", "q": "What are your thoughts on using AI for learning?"},
-    {"type": "FREE", "q": "What is your dream for the future?"}
-]
+ALL_QUESTIONS = {
+    "Set A": [
+        {"type": "TRANS", "q": "「私は3年間、ずっと英語を勉強しています。」を英語にしてください。"},
+        {"type": "TRANS", "q": "「これは、私が昨日買った本です。」を英語にしてください。"},
+        {"type": "FREE", "q": "Please introduce yourself in detail."},
+        {"type": "FREE", "q": "What do you enjoy doing in your free time?"},
+        {"type": "FREE", "q": "Tell me about what your best friend usually does on weekends."},
+        {"type": "FREE", "q": "What did you do last weekend? Please explain in detail."},
+        {"type": "FREE", "q": "How long have you lived in your current city or town?"},
+        {"type": "FREE", "q": "Describe a person who has influenced your life."},
+        {"type": "FREE", "q": "What is your favorite food and why?"},
+        {"type": "FREE", "q": "What is something you want to achieve in the next 5 years?"}
+    ],
+    "Set B": [
+        {"type": "TRANS", "q": "「私は小学生の時から、ピアノを習っています。」を英語にしてください。"},
+        {"type": "TRANS", "q": "「あの人は、私が公園で会った男性です。」を英語にしてください。"},
+        {"type": "FREE", "q": "Please describe your hometown."},
+        {"type": "FREE", "q": "What are your favorite ways to relax after studying or working?"},
+        {"type": "FREE", "q": "Describe a typical busy day for your mother or father."},
+        {"type": "FREE", "q": "Where did you go for your last vacation? What did you do?"},
+        {"type": "FREE", "q": "What is a hobby or activity you have been doing for a long time?"},
+        {"type": "FREE", "q": "Talk about a movie or book that changed your way of thinking."},
+        {"type": "FREE", "q": "Do you prefer living in a city or the countryside? Why?"},
+        {"type": "FREE", "q": "If you had a lot of money, what would you like to build or create?"}
+    ],
+    "Set C": [
+        {"type": "TRANS", "q": "「私は5年前から、この町に住んでいます。」を英語にしてください。"},
+        {"type": "TRANS", "q": "「これは、母が私に作ってくれたケーキです。」を英語にしてください。"},
+        {"type": "FREE", "q": "What are your main interests right now?"},
+        {"type": "FREE", "q": "What are the benefits of learning a new language?"},
+        {"type": "FREE", "q": "Tell me about a coworker or classmate and their daily habits."},
+        {"type": "FREE", "q": "What was the most interesting thing you learned in high school?"},
+        {"type": "FREE", "q": "How has your life changed since you entered university?"},
+        {"type": "FREE", "q": "Describe a place that you really want to visit someday."},
+        {"type": "FREE", "q": "Do you prefer reading books or watching YouTube? Why?"},
+        {"type": "FREE", "q": "What kind of job do you want to try in the future?"}
+    ],
+    "Set D": [
+        {"type": "TRANS", "q": "「私は2020年から、ギターを練習しています。」を英語にしてください。"},
+        {"type": "TRANS", "q": "「あそこにあるのは、私が一番好きなレストランです。」を英語にしてください。"},
+        {"type": "FREE", "q": "What is your favorite season and why?"},
+        {"type": "FREE", "q": "What do you think is the best way to stay healthy?"},
+        {"type": "FREE", "q": "Who is someone you admire, and what do they do every day?"},
+        {"type": "FREE", "q": "What is the best memory from your childhood?"},
+        {"type": "FREE", "q": "Have you ever taken up a new sport or habit recently?"},
+        {"type": "FREE", "q": "Tell me about a problem that you recently solved."},
+        {"type": "FREE", "q": "How do you usually relieve stress?"},
+        {"type": "FREE", "q": "How do you think technology will change our lives in 10 years?"}
+    ]
+}
+
+# 選択されたセットの10問を抽出して使用する
+QUESTIONS = ALL_QUESTIONS[selected_set]
 
 # --- 5. メインロジック ---
 if st.session_state.step < len(QUESTIONS):
