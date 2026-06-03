@@ -1,5 +1,5 @@
 streamlit
-audio-recorder-streamlit
+streamlit-mic-recorder
 openai
 google-cloud-storage
 gspread
