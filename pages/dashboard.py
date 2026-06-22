@@ -33,10 +33,11 @@ with st.spinner("データベースから過去の全テスト結果を集計中
     dashboard_data = []
     # 最初の行から順番に見て、「FINAL」と記録された行だけを抽出
     for row in rows:
-        if len(row) >= 5 and row[2] == "FINAL":
+        if len(row) >= 6 and row[2] == "FINAL":
             try:
-                # 5列目（インデックス4）にあるJSON文字列をPythonの辞書に変換
-                data = json.loads(row[4])
+                # 6列目（インデックス5）にあるJSON文字列をPythonの辞書に変換
+                # （raw/cleaned書き起こしを別列で保存するようになったため、JSON列が1つ後ろにずれている）
+                data = json.loads(row[5])
                 dashboard_data.append({
                     "timestamp": row[0],
                     "user_id": row[1],

@@ -6,6 +6,7 @@ import gspread
 from google.oauth2 import service_account
 from datetime import datetime
 import io
+import time
 
 import json
 import pandas as pd
@@ -20,9 +21,9 @@ client = OpenAI(api_key=api_key)
 
 # スプレッドシート用の認証
 scopes = [
-    "https://www.googleapis.com/auth/spreadsheets", 
+    "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
-    "https://www.googleapis.com/auth/cloud-platform" 
+    "https://www.googleapis.com/auth/cloud-platform"
 ]
 creds = service_account.Credentials.from_service_account_info(gcp_info, scopes=scopes)
 gc = gspread.authorize(creds)
@@ -34,6 +35,32 @@ storage_client = storage.Client(credentials=creds, project=gcp_info["project_id"
 SHEET_NAME = "English_AI_Logs" # スプレッドシートの名前
 BUCKET_NAME = "kentaengspeakingtest202605131619" # 例: "hamaguchi-thesis-audio"
 
+
+# --- 2.5 OpenAI呼び出しの共通ヘルパー（一時的なエラー対策でリトライを入れる） ---
+def call_openai_chat(messages, response_format=None, temperature=0):
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            return client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages,
+                response_format=response_format,
+                temperature=temperature
+            )
+        except Exception:
+            if attempt == max_retries - 1:
+                raise
+            time.sleep(2 ** attempt)  # 1秒, 2秒, 4秒...と間隔を空けて再試行
+
+
+# --- 2.6 被験者の認証情報をスプレッドシート（Testersタブ）から取得 ---
+@st.cache_data(ttl=300)
+def get_tester_credentials():
+    worksheet = gc.open(SHEET_NAME).worksheet("Testers")
+    records = worksheet.get_all_records()
+    return {str(r["username"]): str(r["password"]) for r in records if r.get("username")}
+
+
 # --- 3. アプリの設定 ---
 st.set_page_config(page_title="English Level Checker", layout="centered")
 st.title("🎓 英語レベル・化石化診断テスト")
@@ -44,16 +71,47 @@ if 'results' not in st.session_state:
     st.session_state.results = []
 if 'attempt' not in st.session_state:
     st.session_state.attempt = 0
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
+if 'user_id' not in st.session_state:
+    st.session_state.user_id = ""
+
+# --- 3.5 被験者ログイン（ユーザー名・パスワードはTestersタブで管理） ---
+if not st.session_state.logged_in:
+    st.subheader("🔐 被験者ログイン")
+    login_username = st.text_input("ユーザー名")
+    login_password = st.text_input("パスワード", type="password")
+    if st.button("ログイン"):
+        try:
+            testers = get_tester_credentials()
+        except gspread.exceptions.WorksheetNotFound:
+            st.error("Testersシートが見つかりません。管理者に連絡してください。")
+            st.stop()
+        if login_username and testers.get(login_username) == login_password:
+            st.session_state.logged_in = True
+            st.session_state.user_id = login_username
+            st.rerun()
+        else:
+            st.error("ユーザー名またはパスワードが間違っています。")
+    st.stop()
 
 # サイドバー設定
 with st.sidebar:
     st.header("⚙️ 実験管理")
-    user_id = st.text_input("被験者ID", value="P001")
-    
+    st.write(f"ログイン中: **{st.session_state.user_id}**")
+
     # 👇 新しく「セット選択」のプルダウンを追加！
     selected_set = st.selectbox("テストセットを選択", ["Set A", "Set B", "Set C", "Set D"])
-    
+
     if st.button("テストを最初からやり直す"):
+        st.session_state.step = 0
+        st.session_state.results = []
+        st.session_state.attempt = 0
+        st.rerun()
+
+    if st.button("ログアウト"):
+        st.session_state.logged_in = False
+        st.session_state.user_id = ""
         st.session_state.step = 0
         st.session_state.results = []
         st.session_state.attempt = 0
@@ -117,9 +175,9 @@ QUESTIONS = ALL_QUESTIONS[selected_set]
 # --- 5. メインロジック ---
 if st.session_state.step < len(QUESTIONS):
     current_q = QUESTIONS[st.session_state.step]
-    
+
     st.subheader(f"第 {st.session_state.step + 1} 問 / {len(QUESTIONS)}")
-    
+
     if current_q["type"] == "TRANS":
         st.warning(f"**指定フレーズを英語に直してください：**\n\n {current_q['q']}")
     else:
@@ -132,47 +190,81 @@ if st.session_state.step < len(QUESTIONS):
         key=f"recorder_{st.session_state.step}_{st.session_state.attempt}"
     )
 
-    # 録音が終わったあとの確認画面
+    st.write("または、以前録音した音声ファイルをアップロードすることもできます（同じ発話で他のAIと結果を比較する場合など）。")
+    uploaded_file = st.file_uploader(
+        "音声ファイルをアップロード",
+        type=["wav", "mp3", "m4a", "ogg", "webm"],
+        key=f"uploader_{st.session_state.step}_{st.session_state.attempt}"
+    )
+
+    # 録音 or アップロードされたファイルのどちらかを採用する（録音が優先）
     if audio_data:
-        st.write("▼ 録音した音声を確認できます")
-        st.audio(audio_data['bytes']) 
-        
+        audio_bytes_input = audio_data["bytes"]
+        audio_mime_type = "audio/wav"
+        audio_ext = "wav"
+    elif uploaded_file is not None:
+        audio_bytes_input = uploaded_file.read()
+        audio_mime_type = uploaded_file.type or "audio/wav"
+        audio_ext = uploaded_file.name.rsplit(".", 1)[-1] if "." in uploaded_file.name else "wav"
+    else:
+        audio_bytes_input = None
+
+    # 録音/アップロードが終わったあとの確認画面
+    if audio_bytes_input:
+        st.write("▼ 音声を確認できます")
+        st.audio(audio_bytes_input)
+
         col1, col2 = st.columns(2)
         with col1:
             submit_btn = st.button("✅ この音声で提出する", type="primary", use_container_width=True)
         with col2:
-            retry_btn = st.button("🔄 録音し直す", use_container_width=True)
-            
+            retry_btn = st.button("🔄 録音し直す/選び直す", use_container_width=True)
+
         # 提出ボタンが押されたときの処理
         if submit_btn:
             with st.spinner("音声を処理・保存中..."):
                 timestamp = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
-                file_name = f"{user_id}_Q{st.session_state.step+1}_{timestamp.replace('/','').replace(':','').replace(' ','_')}.wav"
-                audio_bytes = audio_data['bytes']
-                
-                # ① OpenAIで文字起こし
+                file_name = f"{st.session_state.user_id}_Q{st.session_state.step+1}_{timestamp.replace('/','').replace(':','').replace(' ','_')}.{audio_ext}"
+                audio_bytes = audio_bytes_input
+
+                # ① Whisperで文字起こし（一字一句そのまま。Whisperは元から書き起こしのみで修正はしない）
                 with io.BytesIO(audio_bytes) as audio_file:
-                    audio_file.name = "audio.wav"
+                    audio_file.name = f"audio.{audio_ext}"
                     transcript = client.audio.transcriptions.create(
-                        model="whisper-1", 
+                        model="whisper-1",
                         file=audio_file
                     )
-                
+                raw_transcript = transcript.text
+
+                # ①.5 音声認識ノイズだけをテキストベースで補正（文法エラーは残す2段目のパス）
+                cleanup_prompt = (
+                    "以下は英語学習者の発話の音声認識結果です。文脈から考えて明らかな音声認識の誤り"
+                    "（例: 'crab activity' は文脈上 'club activity' の誤認識、'play for' は 'prefer' の誤認識など）を、"
+                    "文脈から判断して正しい単語に直してください。言い淀み(uh, umなど)は除去してかまいません。"
+                    "ただし、学習者本人の文法的な誤り（3単現のsの脱落、時制の誤り、冠詞の誤りなど）は絶対に修正せず、そのまま残すこと。"
+                    "出力はクリーニング済みのテキストのみとし、説明や前置きは不要です。"
+                    f"\n\n【音声認識結果】\n{raw_transcript}"
+                )
+                cleanup_response = call_openai_chat(
+                    messages=[{"role": "user", "content": cleanup_prompt}]
+                )
+                cleaned_transcript = cleanup_response.choices[0].message.content.strip()
+
                 # ② Google Cloud Storageに音声をアップロード
                 bucket = storage_client.bucket(BUCKET_NAME)
                 blob = bucket.blob(file_name)
-                blob.upload_from_string(audio_bytes, content_type='audio/wav')
+                blob.upload_from_string(audio_bytes, content_type=audio_mime_type)
 
-                # ③ スプレッドシートに記録
+                # ③ スプレッドシートに記録（生の書き起こしとクリーニング後の両方を保存し、後から検証できるようにする）
                 sheet = gc.open(SHEET_NAME).sheet1
-                sheet.append_row([timestamp, user_id, st.session_state.step + 1, current_q['q'], transcript.text])
-                
+                sheet.append_row([timestamp, st.session_state.user_id, st.session_state.step + 1, current_q['q'], raw_transcript, cleaned_transcript])
+
                 st.session_state.results.append({
                     "question": current_q['q'],
                     "type": current_q['type'],
-                    "answer": transcript.text
+                    "answer": cleaned_transcript
                 })
-                
+
                 # 次のステップへ進み、録音回数をリセット
                 st.session_state.step += 1
                 st.session_state.attempt = 0
@@ -192,6 +284,8 @@ else:
             summary_text += f"Q{i+1}: {res['question']}\n回答: {res['answer']}\n\n"
 
         # AIにJSON形式で返答させるためのプロンプト
+        # ★エラー率・全体平均・化石化判定の計算はAIにはやらせない（必須文脈数とエラー数の抽出のみ）。
+        #   計算はこの後Python側で必ず行う（AIに計算させると桁数ミスが起こるため）。
         analysis_prompt = """
         あなたは第二言語習得（SLA）の専門家およびデータアナリストです。
         提供された発話データを分析し、以下のJSONスキーマに厳密に従ってデータを出力してください。
@@ -203,22 +297,27 @@ else:
         3. 名詞の境界（Nouns & Articles）
         4. 構文・語順（Syntax）
 
-        【計算ルール】
-        - エラー率(%) = (エラー数 / 必須文脈数) × 100
-        - 全体平均エラー率(%) = (全エラー数合計 / 全必須文脈数合計) × 100
-        - 化石化判定（is_fossilized）: 全体平均エラー率が40%以下、かつ、その観点のエラー率が全体平均より30%以上高い場合に true とすること。
+        【重要・数え方のルール】
+        各観点について、いきなり個数を答えてはいけない。まず本文の最初から最後まで漏れなく確認し、
+        該当する箇所を一つずつ全て抜き出して obligatory_contexts_list に追加すること（「目立つエラー」だけを拾うのではなく、
+        正しく使えている箇所も含めて、その文法規則が適用される場面を全部リストアップする）。
+        そのうち実際に誤っていた箇所だけを error_list に追加すること。個数（件数）はこちら（Python側）でリストの長さから算出するので、
+        あなたは個数を書く必要はない。
+
+        【Self-Repair（自己修正）の除外ルール】
+        学習者が発話中に言い直した箇所は、自己モニター機能が働いている証拠であり、エラーではない。
+        obligatory_contexts_list・error_listのどちらにも含めないこと。
+        例1: "I go... I went to the park." → 正しく自己修正できているため、カウントしない。
+        例2: 単純な言い淀みや繰り返し（"I I love driving"など）、音声認識のノイズらしき箇所も、文法エラーとして数えない。
 
         【出力JSONフォーマット】
         {
             "overall_summary": "学習者のスピーキング傾向についての総評（2〜3文）",
-            "overall_average_error_rate": 25.5,
             "categories": [
                 {
                     "name": "時制",
-                    "obligatory_contexts": 10,
-                    "error_count": 2,
-                    "error_rate": 20.0,
-                    "is_fossilized": false,
+                    "obligatory_contexts_list": ["I have been studying (Q1)", "This is a book (Q2)"],
+                    "error_list": ["go -> went (Q3)"],
                     "details": "エラーの具体例（元の発話の引用）と分析"
                 }
             ],
@@ -227,29 +326,45 @@ else:
         """
 
         # GPT-4o APIの呼び出し（JSONモードを有効化）
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            response_format={ "type": "json_object" },
+        response = call_openai_chat(
             messages=[{"role": "system", "content": analysis_prompt}, {"role": "user", "content": summary_text}],
-            temperature=0
+            response_format={"type": "json_object"}
         )
-        
+
         # JSONデータをPythonの辞書に変換
         result_data = json.loads(response.choices[0].message.content)
+
+        # ★Python側で件数・エラー率・全体平均エラー率・化石化判定を正確に計算する
+        # （件数はAIの自己申告の数字ではなく、AIが書き出したリストの長さから算出する＝数え漏らし対策）
+        for cat in result_data["categories"]:
+            cat["obligatory_contexts"] = len(cat["obligatory_contexts_list"])
+            cat["error_count"] = len(cat["error_list"])
+
+        total_errors = sum(cat["error_count"] for cat in result_data["categories"])
+        total_contexts = sum(cat["obligatory_contexts"] for cat in result_data["categories"])
+        overall_average_error_rate = (total_errors / total_contexts * 100) if total_contexts > 0 else 0
+
+        for cat in result_data["categories"]:
+            cat_rate = (cat["error_count"] / cat["obligatory_contexts"] * 100) if cat["obligatory_contexts"] > 0 else 0
+            cat["error_rate"] = cat_rate
+            # 化石化の定義：全体平均が40%以下 かつ その観点のエラー率が全体平均+30ポイント以上
+            cat["is_fossilized"] = bool(overall_average_error_rate <= 40.0 and cat_rate >= overall_average_error_rate + 30.0)
+
+        result_data["overall_average_error_rate"] = overall_average_error_rate
 
         # ---------------------------------------------------------
         # 画面への描画（UI構築）
         # ---------------------------------------------------------
         st.success("分析が完了しました！")
         st.markdown(f"### 📊 全体総評\n{result_data['overall_summary']}")
-        st.info(f"**全体平均エラー率: {result_data['overall_average_error_rate']}%**")
+        st.info(f"**全体平均エラー率: {result_data['overall_average_error_rate']:.1f}%**")
 
         # データをPandasのデータフレームに変換してグラフ化
         df = pd.DataFrame(result_data['categories'])
 
         # グラフを2列に分けて表示
         col_chart1, col_chart2 = st.columns(2)
-        
+
         with col_chart1:
             st.markdown("#### 🕸️ エラー率レーダーチャート")
             fig_radar = px.line_polar(df, r='error_rate', theta='name', line_close=True, range_r=[0, 100])
@@ -269,7 +384,7 @@ else:
         for cat in result_data['categories']:
             # 化石化フラグが立っていたら警告アイコンをつける
             status_icon = "⚠️ **【化石化の兆候あり】**" if cat['is_fossilized'] else "✅"
-            st.markdown(f"#### {status_icon} {cat['name']} (エラー率: {cat['error_rate']}%)")
+            st.markdown(f"#### {status_icon} {cat['name']} (エラー率: {cat['error_rate']:.1f}%)")
             st.markdown(f"- 必須文脈数: {cat['obligatory_contexts']} / エラー数: {cat['error_count']}")
             st.markdown(f"- **分析:** {cat['details']}")
 
@@ -279,6 +394,6 @@ else:
         # スプレッドシートに記録
         timestamp = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
         sheet = gc.open(SHEET_NAME).sheet1
-        sheet.append_row([timestamp, user_id, "FINAL", "総合診断レポート", json.dumps(result_data, ensure_ascii=False)])
+        sheet.append_row([timestamp, st.session_state.user_id, "FINAL", "総合診断レポート", "", json.dumps(result_data, ensure_ascii=False)])
 
     st.balloons()
