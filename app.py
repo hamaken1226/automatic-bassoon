@@ -240,7 +240,8 @@ if st.session_state.step < len(QUESTIONS):
                     audio_file.name = f"audio.{audio_ext}"
                     transcript = client.audio.transcriptions.create(
                         model="whisper-1",
-                        file=audio_file
+                        file=audio_file,
+                        language="en"
                     )
                 raw_transcript = transcript.text
 
