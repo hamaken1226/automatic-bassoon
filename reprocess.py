@@ -33,12 +33,21 @@ from google.oauth2 import service_account
 
 # ===== ここを編集して対象テスターを指定 =====
 REPROCESS_TARGETS = [
+    {"user_id": "HarunaK", "set_name": "Set A"},
+    {"user_id": "HarunaK", "set_name": "Set B"},
+    {"user_id": "HarunaK", "set_name": "Set C"},
+    {"user_id": "HarunaK", "set_name": "Set D"},
+    {"user_id": "MakoI",   "set_name": "Set A"},
+    {"user_id": "MakoI",   "set_name": "Set B"},
+    {"user_id": "MakoI",   "set_name": "Set C"},
+    {"user_id": "MakoI",   "set_name": "Set D"},
     {"user_id": "HaruhiK", "set_name": "Set A"},
     {"user_id": "HaruhiK", "set_name": "Set B"},
     {"user_id": "HaruhiK", "set_name": "Set C"},
     {"user_id": "HaruhiK", "set_name": "Set D"},
-    {"user_id": "MakoI", "set_name": "Set A"},
-    {"user_id": "MakoI", "set_name": "Set B"},
+    {"user_id": "TaiseiW", "set_name": "Set A"},
+    # KentaH（研究者自身のデータ）は必要なら追加:
+    # {"user_id": "KentaH", "set_name": "Set A"},
 ]
 # ============================================
 
@@ -318,7 +327,7 @@ def process_tester(user_id, set_name):
         print(f"       cleaned: {cleaned[:70]}")
 
         sheet.append_row([timestamp_base, user_id, q_num, q["q"], raw, cleaned])
-        results.append({"question": q["q"], "type": q["type"], "answer": cleaned})
+        results.append({"question": q["q"], "type": q["type"], "answer": raw})
         time.sleep(0.5)
 
     print(f"\n  総合分析中...")

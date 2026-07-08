@@ -272,7 +272,7 @@ if st.session_state.step < len(QUESTIONS):
                 st.session_state.results.append({
                     "question": current_q['q'],
                     "type": current_q['type'],
-                    "answer": cleaned_transcript
+                    "answer": raw_transcript
                 })
 
                 # 次のステップへ進み、録音回数をリセット
