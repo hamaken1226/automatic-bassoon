@@ -33,8 +33,12 @@ from google.oauth2 import service_account
 
 # ===== ここを編集して対象テスターを指定 =====
 REPROCESS_TARGETS = [
-    {"user_id": "tester1", "set_name": "Set A"},
-    # {"user_id": "tester2", "set_name": "Set B"},
+    {"user_id": "HaruhiK", "set_name": "Set A"},
+    {"user_id": "HaruhiK", "set_name": "Set B"},
+    {"user_id": "HaruhiK", "set_name": "Set C"},
+    {"user_id": "HaruhiK", "set_name": "Set D"},
+    {"user_id": "MakoI", "set_name": "Set A"},
+    {"user_id": "MakoI", "set_name": "Set B"},
 ]
 # ============================================
 
@@ -128,24 +132,44 @@ def call_openai_chat(messages, response_format=None, temperature=0):
             time.sleep(2 ** attempt)
 
 
-def list_audio_blobs(user_id):
-    """GCSからユーザーの音声ファイルを取得し、Q番号→最新blobのマップを返す"""
+SET_ORDER = ["Set A", "Set B", "Set C", "Set D"]
+
+
+def list_audio_sessions(user_id):
+    """
+    全音声ファイルをタイムスタンプ順に並べ、Q1の出現をトリガーにセッション（セット）ごとに分割する。
+    Returns: list of {q_num: blob} (古いセッションが先頭)
+    """
     bucket = storage_client.bucket(BUCKET_NAME)
     blobs = list(bucket.list_blobs(prefix=f"{user_id}_Q"))
 
-    question_map = {}
+    # Q番号を持つblobのみ抽出 & タイムスタンプ順ソート
+    valid = []
     for blob in blobs:
         parts = blob.name.split("_")
-        if len(parts) < 2:
-            continue
-        q_part = parts[1]  # "Q3"
-        if q_part.startswith("Q") and q_part[1:].isdigit():
-            q_num = int(q_part[1:])
-            # 同じ問題に複数ファイルがある場合は最新を使う
-            if q_num not in question_map or blob.updated > question_map[q_num].updated:
-                question_map[q_num] = blob
+        # 旧形式: user_Q1_timestamp  新形式: user_SetA_Q1_timestamp
+        q_part = None
+        for part in parts[1:]:
+            if part.startswith("Q") and part[1:].isdigit():
+                q_part = part
+                break
+        if q_part:
+            valid.append((int(q_part[1:]), blob))
 
-    return question_map
+    valid.sort(key=lambda x: x[1].updated)
+
+    sessions = []
+    current = {}
+    for q_num, blob in valid:
+        if q_num == 1 and current:
+            sessions.append(current)
+            current = {}
+        if q_num not in current or blob.updated > current[q_num].updated:
+            current[q_num] = blob
+    if current:
+        sessions.append(current)
+
+    return sessions
 
 
 def download_blob(blob):
@@ -159,7 +183,7 @@ def transcribe_and_clean(audio_bytes, ext="wav"):
     """Whisper文字起こし → ASRノイズのみクリーンアップ（文法エラーは残す）"""
     with io.BytesIO(audio_bytes) as f:
         f.name = f"audio.{ext}"
-        result = client.audio.transcriptions.create(model="whisper-1", file=f)
+        result = client.audio.transcriptions.create(model="whisper-1", file=f, language="en")
     raw = result.text
 
     cleanup_prompt = (
@@ -255,11 +279,23 @@ def process_tester(user_id, set_name):
     sheet = gc.open(SHEET_NAME).sheet1
     timestamp_base = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
 
-    # GCSから音声ファイル一覧を取得
-    question_map = list_audio_blobs(user_id)
-    found_qs = sorted(question_map.keys())
-    print(f"GCSで見つかった問題: {found_qs}")
+    # セッション分割してセット対応を確認
+    sessions = list_audio_sessions(user_id)
+    set_index = SET_ORDER.index(set_name)
 
+    print(f"  検出されたセッション数: {len(sessions)}")
+    for i, sess in enumerate(sessions):
+        q_nums = sorted(sess.keys())
+        first_t = sess[q_nums[0]].updated.strftime("%m/%d %H:%M")
+        last_t  = sess[q_nums[-1]].updated.strftime("%H:%M")
+        marker = "  ← ★今回使用" if i == set_index else ""
+        print(f"    Session {i} ({first_t}〜{last_t})  Q{q_nums}{marker}")
+
+    if set_index >= len(sessions):
+        print(f"⚠️  {set_name} に対応するセッション(index {set_index})が見つかりません。スキップします。")
+        return
+
+    question_map = sessions[set_index]
     missing = [i+1 for i in range(len(questions)) if (i+1) not in question_map]
     if missing:
         print(f"⚠️  音声が見つからない問題: Q{missing}  → スキップします")
@@ -304,10 +340,29 @@ if __name__ == "__main__":
     for t in REPROCESS_TARGETS:
         print(f"  - {t['user_id']} / {t['set_name']}")
     print("=" * 55)
-    print("\n⚠️  スプレッドシートから対象テスターの行を削除しましたか？")
-    ans = input("削除済みなら 'yes' を入力: ").strip().lower()
+    # --- セッション割り当てのプレビュー ---
+    print("\n【セッション割り当てプレビュー】")
+    checked_users = set()
+    for target in REPROCESS_TARGETS:
+        uid = target["user_id"]
+        if uid in checked_users:
+            continue
+        checked_users.add(uid)
+        sessions = list_audio_sessions(uid)
+        print(f"\n  {uid}: {len(sessions)}セッション検出")
+        for i, sess in enumerate(sessions):
+            q_nums = sorted(sess.keys())
+            first_t = sess[q_nums[0]].updated.strftime("%m/%d %H:%M")
+            last_t  = sess[q_nums[-1]].updated.strftime("%H:%M")
+            matched = [t["set_name"] for t in REPROCESS_TARGETS if t["user_id"] == uid and SET_ORDER.index(t["set_name"]) == i]
+            label = f"→ {matched[0]}" if matched else "(対象外)"
+            print(f"    Session {i} ({first_t}〜{last_t})  Q{q_nums}  {label}")
+
+    print("\n上のセッション割り当てが正しければ処理を開始します。")
+    print("⚠️  スプレッドシートから対象テスターの行を削除しましたか？")
+    ans = input("問題なければ 'yes' を入力（中断する場合は他の文字）: ").strip().lower()
     if ans != "yes":
-        print("中断しました。先にスプレッドシートの行を削除してください。")
+        print("中断しました。")
         exit(0)
 
     for target in REPROCESS_TARGETS:

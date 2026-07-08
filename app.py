@@ -232,7 +232,8 @@ if st.session_state.step < len(QUESTIONS):
         if submit_btn:
             with st.spinner("音声を処理・保存中..."):
                 timestamp = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
-                file_name = f"{st.session_state.user_id}_Q{st.session_state.step+1}_{timestamp.replace('/','').replace(':','').replace(' ','_')}.{audio_ext}"
+                set_tag = selected_set.replace(" ", "")  # "SetA", "SetB", ...
+                file_name = f"{st.session_state.user_id}_{set_tag}_Q{st.session_state.step+1}_{timestamp.replace('/','').replace(':','').replace(' ','_')}.{audio_ext}"
                 audio_bytes = audio_bytes_input
 
                 # ① Whisperで文字起こし（一字一句そのまま。Whisperは元から書き起こしのみで修正はしない）
