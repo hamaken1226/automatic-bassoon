@@ -22,12 +22,17 @@ stability.py — 採点のぶれ（再現性）を検証する再実験スクリ
   3. 集計する
        python experiments/stability.py summarize
 
-条件（--conditions で選択。左から順に1要素ずつ追加していく段階的な設計）:
-  baseline   app.py と同じプロンプト（temperature=0、10問まとめて1回で採点）
-  seed       baseline + seed を固定
-  schema     seed + 出力を「1箇所＝1項目（is_error 付き）」の構造化 JSON に変更し、フィードバック文の生成を省く
-  rules      schema + 観点ごとの必須文脈の数え方（数える単位）を明文化
-  rules_perq rules + 1問ずつ別々に採点して合算
+条件（--conditions で選択。プロンプトの中身は prompts.py を参照）:
+  メインの比較（既定ではこの4つを実行）
+    baseline      現状の app.py と同じプロンプト（temperature=0、10問まとめて1回で採点）
+    a_rubric      プロンプトA「定義の明文化」: 何を1件と数えるかを観点ごとに厳密に定義
+    b_clause      プロンプトB「手順の固定」: 節に分け、節ごとに決まった4つの質問に順番に答えさせる
+    c_fewshot     プロンプトC「採点例の提示」: 定義は最小限にし、採点済みの例を2つ見せる
+  補助の分析用（改善のうち、どこまでが乱数の固定・出力形式・一度に処理する量の効果かを切り分ける）
+    seed          baseline + seed を固定
+    schema        A/C と同じ出力形式で、定義も例もない最小限のプロンプト
+    a_rubric_perq プロンプトA を1問ずつ別々に採点して合算
+  baseline 以外はすべて seed を固定し、フィードバック文は生成させない。
 
 注意: .streamlit/secrets.toml（OPENAI_API_KEY, gcp_service_account）が必要。export のみ GCP 認証を使う。
 """
@@ -62,8 +67,10 @@ DEFAULT_RESULTS = EXP_DIR / "results" / "runs.jsonl"
 SHEET_NAME = "English_AI_Logs"
 BUCKET_NAME = "kentaengspeakingtest202605131619"
 SET_ORDER = ["Set A", "Set B", "Set C", "Set D"]
-CATEGORIES = ["時制", "主語と動詞の一致", "名詞の境界", "構文・語順"]
-ALL_CONDITIONS = ["baseline", "seed", "schema", "rules", "rules_perq"]
+# メインの比較（現状 + キーポイントの異なる3つのプロンプト）と、補助の分析用の条件
+MAIN_CONDITIONS = ["baseline", "a_rubric", "b_clause", "c_fewshot"]
+EXTRA_CONDITIONS = ["seed", "schema", "a_rubric_perq"]
+ALL_CONDITIONS = MAIN_CONDITIONS + EXTRA_CONDITIONS
 SEED = 42
 
 # --- 問題リスト（app.pyと同一）---
@@ -126,119 +133,9 @@ QUESTION_INDEX = {
 }
 
 
-# ======================================================================
-# プロンプト
-# ======================================================================
-
-# baseline / seed: app.py の analysis_prompt と同一
-BASELINE_PROMPT = """
-        あなたは第二言語習得（SLA）の専門家およびデータアナリストです。
-        提供された発話データを分析し、以下のJSONスキーマに厳密に従ってデータを出力してください。
-        （※Markdownなどの装飾は一切含めず、純粋なJSONオブジェクトのみを出力すること）
-
-        【分析の4観点】
-        1. 時制（Tense）
-        2. 主語と動詞の一致（Agreement）
-        3. 名詞の境界（Nouns & Articles）
-        4. 構文・語順（Syntax）
-
-        【重要・数え方のルール】
-        各観点について、いきなり個数を答えてはいけない。まず本文の最初から最後まで漏れなく確認し、
-        該当する箇所を一つずつ全て抜き出して obligatory_contexts_list に追加すること（「目立つエラー」だけを拾うのではなく、
-        正しく使えている箇所も含めて、その文法規則が適用される場面を全部リストアップする）。
-        そのうち実際に誤っていた箇所だけを error_list に追加すること。個数（件数）はこちら（Python側）でリストの長さから算出するので、
-        あなたは個数を書く必要はない。
-
-        【Self-Repair（自己修正）の除外ルール】
-        学習者が発話中に言い直した箇所は、自己モニター機能が働いている証拠であり、エラーではない。
-        obligatory_contexts_list・error_listのどちらにも含めないこと。
-        例1: "I go... I went to the park." → 正しく自己修正できているため、カウントしない。
-        例2: 単純な言い淀みや繰り返し（"I I love driving"など）、音声認識のノイズらしき箇所も、文法エラーとして数えない。
-
-        【言語に関する重要な指示】
-        "overall_summary"・"details"・"advice"の文章は、テスター（学習者本人）に直接渡すフィードバックです。
-        必ず**日本語**で書くこと（英語で書いてはいけない）。obligatory_contexts_list・error_listの引用部分は元の発話のまま英語でよい。
-
-        【出力JSONフォーマット】
-        {
-            "overall_summary": "学習者のスピーキング傾向についての総評（2〜3文、日本語）",
-            "categories": [
-                {
-                    "name": "時制",
-                    "obligatory_contexts_list": ["I have been studying (Q1)", "This is a book (Q2)"],
-                    "error_list": ["go -> went (Q3)"],
-                    "details": "エラーの具体例（元の発話の引用）と分析（日本語で記述）"
-                }
-            ],
-            "advice": "今後の学習アドバイス（日本語）"
-        }
-        """
-
-_ITEM_COMMON = """
-あなたは第二言語習得（SLA）の専門家です。英語学習者の発話の書き起こしを読み、4つの文法観点について
-「その文法規則が適用される箇所（必須文脈）」を、正しく使えている箇所も含めてすべて抜き出してください。
-
-【4観点】時制 / 主語と動詞の一致 / 名詞の境界 / 構文・語順
-
-【出力のルール】
-- 該当箇所を1つ見つけるごとに items に1項目を追加する。正しい箇所は is_error=false、誤りは is_error=true とする。
-- 発話の最初から最後まで、問題番号の順に漏れなく確認すること。目立つ誤りだけを拾ってはいけない。
-- q には問題番号（例: "Q3"）、quote には該当部分を元の発話のまま英語で引用する。
-- correction には、誤りの場合は正しい形を、正しい場合は空文字を入れる。
-
-【除外ルール】
-- 学習者が発話中に言い直した箇所（Self-Repair）は、言い直す前・後のどちらも items に含めない。
-  例: "I go... I went to the park." → go も went も数えない。
-- 単純な言い淀みや繰り返し（"I I love driving" など）、音声認識のノイズらしき箇所も数えない。
-"""
-
-SCHEMA_PROMPT = _ITEM_COMMON
-
-RULES_PROMPT = _ITEM_COMMON + """
-【必須文脈の数え方（数える単位）】※この定義に厳密に従い、定義にない箇所は数えないこと
-- 時制: 述語動詞（主語に対応する定形動詞。助動詞＋動詞は1つのまとまりとして扱う）1つにつき1件。
-  to不定詞・動名詞・分詞の単独用法は数えない。話している内容の時間（過去・現在・未来・継続など）に合わない形なら誤り。
-- 主語と動詞の一致: 人称・数で形が変わる述語動詞1つにつき1件。具体的には、一般動詞の現在形、be動詞（am/is/are/was/were）、
-  have/has、do/does。一般動詞の過去形や助動詞（can, will など）の後の動詞は数えない。主語の人称・数と合っていなければ誤り。
-- 名詞の境界: 普通名詞を中心とする名詞句1つにつき1件。固有名詞・代名詞は数えない。
-  冠詞（a/an/the）の有無・選択、または単数形・複数形が誤っていれば誤り。
-- 構文・語順: 節（主語と述語動詞のまとまり）1つにつき1件。語順の崩れ、必須要素（主語・動詞・目的語など）の欠落、
-  関係詞節などの構造の誤りがあれば誤り。
-
-【1つの誤りは1観点だけ】
-1つの誤りは、最もよく当てはまる1つの観点にだけ is_error=true として記録する
-（例: 3単現の s の抜けは「主語と動詞の一致」のみ。「時制」の誤りにはしない）。
-"""
-
-ITEM_SCHEMA = {
-    "type": "json_schema",
-    "json_schema": {
-        "name": "obligatory_contexts",
-        "strict": True,
-        "schema": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "category": {"type": "string", "enum": CATEGORIES},
-                            "q": {"type": "string"},
-                            "quote": {"type": "string"},
-                            "is_error": {"type": "boolean"},
-                            "correction": {"type": "string"},
-                        },
-                        "required": ["category", "q", "quote", "is_error", "correction"],
-                        "additionalProperties": False,
-                    },
-                }
-            },
-            "required": ["items"],
-            "additionalProperties": False,
-        },
-    },
-}
+# プロンプトと出力形式は prompts.py にまとめてある
+from prompts import (BASELINE_PROMPT, CATEGORIES, CLAUSE_PROMPT, CLAUSE_SCHEMA, FEWSHOT_PROMPT, ITEM_SCHEMA,
+                     RUBRIC_PROMPT, SCHEMA_PROMPT)
 
 
 # ======================================================================
@@ -489,6 +386,25 @@ def score(counts, margin):
     return overall, cats
 
 
+def counts_from_clauses(clauses):
+    """プロンプトB の節ごとの出力を、観点ごとの件数にまとめる（skip の節と applicable=false の質問は数えない）"""
+    counts = {c: {"contexts": 0, "errors": 0} for c in CATEGORIES}
+    for cl in clauses:
+        if cl["skip"]:
+            continue
+        for key, cat in [("tense", "時制"), ("agreement", "主語と動詞の一致"), ("syntax", "構文・語順")]:
+            if cl[key]["applicable"]:
+                counts[cat]["contexts"] += 1
+                counts[cat]["errors"] += int(bool(cl[key]["is_error"]))
+        for np_ in cl["noun_phrases"]:
+            counts["名詞の境界"]["contexts"] += 1
+            counts["名詞の境界"]["errors"] += int(bool(np_["is_error"]))
+    return counts
+
+
+ITEM_PROMPTS = {"schema": SCHEMA_PROMPT, "a_rubric": RUBRIC_PROMPT, "a_rubric_perq": RUBRIC_PROMPT, "c_fewshot": FEWSHOT_PROMPT}
+
+
 def run_once(client, model, condition, questions):
     """1回分の採点。(counts, 生の出力リスト, system_fingerprint) を返す"""
     seed = None if condition == "baseline" else SEED
@@ -497,11 +413,13 @@ def run_once(client, model, condition, questions):
         content = resp.choices[0].message.content
         return counts_from_baseline(json.loads(content)), [content], resp.system_fingerprint
 
-    system = SCHEMA_PROMPT if condition == "schema" else RULES_PROMPT
-    if condition in ("schema", "rules"):
-        groups = [questions]
-    else:  # rules_perq: 1問ずつ
-        groups = [[q] for q in questions if q["answer"]]
+    if condition == "b_clause":
+        resp = chat(client, model, CLAUSE_PROMPT, format_answers(questions), CLAUSE_SCHEMA, seed)
+        content = resp.choices[0].message.content
+        return counts_from_clauses(json.loads(content)["clauses"]), [content], resp.system_fingerprint
+
+    system = ITEM_PROMPTS[condition]
+    groups = [[q] for q in questions if q["answer"]] if condition == "a_rubric_perq" else [questions]
     items, raws, fingerprint = [], [], None
     for g in groups:
         resp = chat(client, model, system, format_answers(g), ITEM_SCHEMA, seed)
@@ -660,10 +578,10 @@ def cmd_summarize(args):
                 writer.writerow({k: round(v, 3) if isinstance(v, float) else v for k, v in row.items()})
 
     print(f"化石化の判定基準: 観点のエラー率 >= 全体平均 + {margin}ポイント\n")
-    print(f"{'条件':<11}{'テキスト':<9}{'セッション':>6}{'回数':>5}{'エラー率SD':>11}{'エラー率幅':>10}"
+    print(f"{'条件':<13}{'テキスト':<9}{'セッション':>6}{'回数':>5}{'エラー率SD':>11}{'エラー率幅':>10}"
           f"{'文脈数SD':>9}{'全体SD':>8}{'化石化一致率':>11}{'判定が割れた':>10}")
     for r in cond_rows:
-        print(f"{r['condition']:<11}{r['text']:<9}{r['sessions']:>9}{r['runs_per_session']:>6}"
+        print(f"{r['condition']:<14}{r['text']:<9}{r['sessions']:>9}{r['runs_per_session']:>6}"
               f"{r['mean_rate_sd']:>12.1f}{r['mean_rate_range']:>12.1f}{r['mean_contexts_sd']:>11.1f}"
               f"{r['mean_overall_sd']:>9.1f}{r['fossil_agreement'] * 100:>13.0f}%{r['flipped_cells']:>8}/{r['cells']}")
     print("\n（SD・幅は値が小さいほど安定。化石化一致率は、同じ判定になった実行の割合の平均）")
@@ -691,7 +609,8 @@ def main():
     r.add_argument("--input", default=str(DEFAULT_TRANSCRIPTS))
     r.add_argument("--results", default=str(DEFAULT_RESULTS))
     r.add_argument("--text", choices=["whisper", "manual"], default="whisper", help="どちらの書き起こしを採点するか")
-    r.add_argument("--conditions", default=",".join(ALL_CONDITIONS))
+    r.add_argument("--conditions", default=",".join(MAIN_CONDITIONS),
+                   help=f"カンマ区切り。既定はメインの4条件。選べるのは {ALL_CONDITIONS}")
     r.add_argument("--runs", type=int, default=5)
     r.add_argument("--users", help="カンマ区切りで対象テスターを絞る（例: KentaH）")
     r.add_argument("--sets", help='カンマ区切りで対象セットを絞る（例: "Set A,Set B"）')
