@@ -92,9 +92,11 @@ python experiments/stability.py run --runs 5
 
 - **分析対象の参加者:** P001（研究者本人の Set A〜D）、HarunaK、HaruhiK、MakoI の4名（`--users` を省略するとこの4名）。
   TaiseiW は Set A しか実施していないので含めない。KentaH は研究者本人の2回目の Set A なので既定では含めない。
-- **欠けているセット（2026-10-07 時点のシート）:** HaruhiK B（6問）、MakoI B・C・D（6・1・7問）。
-  `transcribe` で GCS の音声から文字起こしし直して埋める。以前の `reprocess.py` はセット名入りの新しいファイル名を拾えなかったため、
-  それが欠けの原因の可能性がある。`transcribe` は旧形式のファイルのセットを Q1 の文字起こしの中身（English / piano / town / guitar）から判定する。
+- **分析に使うデータ（2026-10-07 確定）:** 4名・計15セット。全問を GCS の音声から Whisper（language=en）で文字起こしし直した（`transcribe --all`）。
+  P001 A〜D、HarunaK A〜D、HaruhiK A〜D、MakoI A・C・D。
+  - 途中でやめて受け直したセットは、10問そろった最新の回を使った（HaruhiK B）。
+  - MakoI の Set B は、10問そろった回が見つからなかったため除外した（6問で中断した回のみ。16:33 の10問の回は中身が Set B の問いと合わなかった）。
+  - 以前のシートの欠け（HaruhiK B、MakoI B・C・D）は、`reprocess.py` が録音の回を順番でセットに割り当てていたため、中断した回を拾っていたことが原因だった。
 - シートの D 列に「手動チェック」列があると列が1つずれるが、`export` はどちらの並びでも読める。
   GCP の認証がない環境では、スプレッドシートを「ファイル → ダウンロード → CSV」で保存し、`export --from-csv <ファイル>` で読める。
 - 結果は `experiments/results/runs.jsonl` に1回ずつ追記される。途中で止めても、もう一度 `run` を実行すれば続きから再開できる。
