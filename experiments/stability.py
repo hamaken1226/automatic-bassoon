@@ -560,12 +560,20 @@ def chat(client, model, system, user, response_format, seed):
         kwargs["seed"] = seed
     for attempt in range(4):
         try:
-            return client.chat.completions.create(**kwargs)
+            resp = client.chat.completions.create(**kwargs)
+            break
         except Exception as e:
             if attempt == 3:
                 raise
             print(f"    API error ({e}), {2 ** attempt}秒後にリトライ...")
             time.sleep(2 ** attempt)
+    if resp.choices[0].finish_reason == "length":
+        raise TruncatedOutput("出力が上限に達して途中で切れました")
+    return resp
+
+
+class TruncatedOutput(Exception):
+    """モデルの出力が最大出力トークン数に達して途中で切れた"""
 
 
 def normalize_category(name):
@@ -628,29 +636,60 @@ def counts_from_clauses(clauses):
 ITEM_PROMPTS = {"schema": SCHEMA_PROMPT, "a_rubric": RUBRIC_PROMPT, "a_rubric_perq": RUBRIC_PROMPT, "c_fewshot": FEWSHOT_PROMPT}
 
 
+# A・B・C（と schema）は、必須文脈を1つずつ書き出すので出力が長くなる。回答の長い参加者では
+# GPT-4o の最大出力トークン数を超えて途中で切れるため、問題をこの数ずつに分けて採点し、件数を合算する。
+# 分け方は全員・全プロンプトで同じ（Q1〜5 と Q6〜10）。baseline / seed は app.py と同じく10問まとめて採点する。
+CHUNK_SIZE = 5
+
+
+def chunked(questions, size):
+    answered = [q for q in questions if q["answer"]]
+    return [answered[i:i + size] for i in range(0, len(answered), size)]
+
+
 def run_once(client, model, condition, questions):
-    """1回分の採点。(counts, 生の出力リスト, system_fingerprint) を返す"""
+    """1回分の採点。(counts, 生の出力リスト, system_fingerprint, 分割情報) を返す"""
     seed = None if condition == "baseline" else SEED
     if condition in ("baseline", "seed"):
         resp = chat(client, model, BASELINE_PROMPT, format_answers(questions), {"type": "json_object"}, seed)
         content = resp.choices[0].message.content
-        return counts_from_baseline(json.loads(content)), [content], resp.system_fingerprint
+        return counts_from_baseline(json.loads(content)), [content], resp.system_fingerprint, None
 
     if condition == "b_clause":
-        resp = chat(client, model, CLAUSE_PROMPT, format_answers(questions), CLAUSE_SCHEMA, seed)
-        content = resp.choices[0].message.content
-        return counts_from_clauses(json.loads(content)["clauses"]), [content], resp.system_fingerprint
+        system, schema, key, to_counts = CLAUSE_PROMPT, CLAUSE_SCHEMA, "clauses", counts_from_clauses
+    else:
+        system, schema, key, to_counts = ITEM_PROMPTS[condition], ITEM_SCHEMA, "items", counts_from_items
+    size = 1 if condition == "a_rubric_perq" else CHUNK_SIZE
 
-    system = ITEM_PROMPTS[condition]
-    groups = [[q] for q in questions if q["answer"]] if condition == "a_rubric_perq" else [questions]
-    items, raws, fingerprint = [], [], None
-    for g in groups:
-        resp = chat(client, model, system, format_answers(g), ITEM_SCHEMA, seed)
+    parsed, raws, fingerprint, sizes = [], [], None, []
+
+    def score_group(g):
+        nonlocal fingerprint
+        try:
+            resp = chat(client, model, system, format_answers(g), schema, seed)
+        except TruncatedOutput:
+            if len(g) == 1:
+                raise
+            half = len(g) // 2  # それでも切れたら、さらに半分に分けてやり直す
+            score_group(g[:half])
+            score_group(g[half:])
+            return
         content = resp.choices[0].message.content
-        items.extend(json.loads(content)["items"])
+        parsed.extend(json.loads(content)[key])
         raws.append(content)
+        sizes.append(len(g))
         fingerprint = resp.system_fingerprint
-    return counts_from_items(items), raws, fingerprint
+
+    for g in chunked(questions, size):
+        score_group(g)
+    return to_counts(parsed), raws, fingerprint, sizes
+
+
+def design_key(condition):
+    """採点の分け方。分け方が変わった結果を同じ条件として混ぜないために、実行済みの判定と集計に使う"""
+    if condition in ("baseline", "seed"):
+        return None
+    return 1 if condition == "a_rubric_perq" else CHUNK_SIZE
 
 
 def read_results(path):
@@ -681,7 +720,8 @@ def cmd_run(args):
 
     results_path = Path(args.results)
     results_path.parent.mkdir(parents=True, exist_ok=True)
-    done = {(r["condition"], r["text"], r["user_id"], r["set_name"], r["run"], r["model"]) for r in read_results(results_path)}
+    done = {(r["condition"], r["text"], r["user_id"], r["set_name"], r["run"], r["model"])
+            for r in read_results(results_path) if r.get("chunk") == design_key(r["condition"])}
 
     jobs = [
         (cond, uid, set_name, run)
@@ -700,11 +740,12 @@ def cmd_run(args):
     def work(job):
         cond, uid, set_name, run = job
         questions = sessions[(uid, set_name)]
-        counts, raws, fingerprint = run_once(client, args.model, cond, questions)
+        counts, raws, fingerprint, sizes = run_once(client, args.model, cond, questions)
         overall, cats = score(counts, args.margin)
         record = {
             "condition": cond, "text": args.text, "user_id": uid, "set_name": set_name, "run": run,
             "model": args.model, "system_fingerprint": fingerprint, "margin": args.margin,
+            "chunk": design_key(cond), "chunk_sizes": sizes,
             "timestamp": datetime.now().isoformat(timespec="seconds"),
             "overall_rate": overall, "categories": cats, "raw_outputs": raws,
         }
@@ -736,6 +777,8 @@ def sd(xs):
 
 def cmd_summarize(args):
     records = read_results(Path(args.results))
+    # 分け方を変える前（10問まとめて）の A・B・C の結果は、今の設計と条件が違うので集計に含めない
+    records = [r for r in records if r.get("chunk") == design_key(r["condition"])]
     if args.model:
         records = [r for r in records if r["model"] == args.model]
     if not records:
