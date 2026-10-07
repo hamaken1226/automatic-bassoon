@@ -851,7 +851,95 @@ def cmd_summarize(args):
               f"{r['mean_rate_sd']:>12.1f}{r['mean_rate_range']:>12.1f}{r['mean_contexts_sd']:>11.1f}"
               f"{r['mean_overall_sd']:>9.1f}{r['fossil_agreement'] * 100:>13.0f}%{r['flipped_cells']:>8}/{r['cells']}")
     print("\n（SD・幅は値が小さいほど安定。化石化一致率は、同じ判定になった実行の割合の平均）")
-    print(f"詳細 → {out_dir / 'summary_cells.csv'}, {out_dir / 'summary_conditions.csv'}")
+
+    # 観点ごとの内訳: どの観点がぶれるか、各プロンプトのエラー率の水準（平均）はどれくらいか
+    cat_rows = []
+    for (cond, text), rows in sorted(by_cond.items(), key=lambda kv: (kv[0][1], cond_order.get(kv[0][0], 99))):
+        for cat in CATEGORIES:
+            rs = [r for r in rows if r["category"] == cat]
+            cat_rows.append({
+                "condition": cond, "text": text, "category": cat,
+                "mean_rate": statistics.mean(r["rate_mean"] for r in rs),
+                "mean_rate_sd": statistics.mean(r["rate_sd"] for r in rs),
+                "mean_contexts": statistics.mean(r["contexts_mean"] for r in rs),
+                "mean_contexts_sd": statistics.mean(r["contexts_sd"] for r in rs),
+                "flipped_cells": sum(r["fossil_flipped"] for r in rs), "cells": len(rs),
+            })
+    print("\n【観点ごとの内訳】 平均エラー率（水準） / エラー率SD / 平均文脈数 / 文脈数SD / 判定が割れた数")
+    for text in sorted({r["text"] for r in cat_rows}):
+        conds = [c for c in ALL_CONDITIONS if any(r["condition"] == c and r["text"] == text for r in cat_rows)]
+        for cat in CATEGORIES:
+            cells = []
+            for c in conds:
+                r = next(x for x in cat_rows if x["condition"] == c and x["text"] == text and x["category"] == cat)
+                cells.append(f"{c}: {r['mean_rate']:.1f}% / {r['mean_rate_sd']:.1f} / {r['mean_contexts']:.1f} / "
+                             f"{r['mean_contexts_sd']:.1f} / {r['flipped_cells']}")
+            print(f"  [{text}] {cat}")
+            for line in cells:
+                print(f"      {line}")
+
+    # 検定: 同じセル（参加者×セット×観点）について、baseline と各条件のエラー率SDを比べる（Wilcoxon の符号付き順位検定）
+    test_rows = []
+    for text in sorted({r["text"] for r in cell_rows}):
+        base = {(r["user_id"], r["set_name"], r["category"]): r["rate_sd"]
+                for r in cell_rows if r["condition"] == "baseline" and r["text"] == text}
+        for cond in ALL_CONDITIONS:
+            if cond == "baseline":
+                continue
+            other = {(r["user_id"], r["set_name"], r["category"]): r["rate_sd"]
+                     for r in cell_rows if r["condition"] == cond and r["text"] == text}
+            keys = sorted(set(base) & set(other))
+            if len(keys) < 6:
+                continue
+            res = wilcoxon_signed_rank([other[k] - base[k] for k in keys])
+            test_rows.append({"text": text, "condition": cond, "pairs": len(keys),
+                              "median_sd_baseline": statistics.median(base[k] for k in keys),
+                              "median_sd_condition": statistics.median(other[k] for k in keys), **res})
+    if test_rows:
+        print("\n【検定】 観点ごとのエラー率SD を baseline と比べた結果（Wilcoxon の符号付き順位検定、両側、正規近似）")
+        for r in test_rows:
+            sig = "有意" if r["p"] < 0.05 else "有意差なし"
+            print(f"  [{r['text']}] {r['condition']:<14} SDの中央値 {r['median_sd_baseline']:.1f} → {r['median_sd_condition']:.1f}"
+                  f"  （n={r['n_nonzero']}, z={r['z']:.2f}, p={r['p']:.4f}, {sig}）")
+
+    for name, rows in [("summary_categories.csv", cat_rows), ("summary_tests.csv", test_rows)]:
+        if not rows:
+            continue
+        with open(out_dir / name, "w", newline="", encoding="utf-8-sig") as f:
+            writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+            writer.writeheader()
+            for row in rows:
+                writer.writerow({k: round(v, 4) if isinstance(v, float) else v for k, v in row.items()})
+    print(f"\n詳細 → {out_dir}（summary_conditions / summary_categories / summary_tests / summary_cells の各 CSV）")
+
+
+def wilcoxon_signed_rank(diffs):
+    """対応のある差のリストに対する Wilcoxon の符号付き順位検定（差が0のペアは除く。同順位は平均順位、正規近似・同順位補正あり）"""
+    import math
+    d = [x for x in diffs if abs(x) > 1e-12]
+    n = len(d)
+    if n == 0:
+        return {"n_nonzero": 0, "w_plus": 0.0, "w_minus": 0.0, "z": 0.0, "p": 1.0}
+    order = sorted(range(n), key=lambda i: abs(d[i]))
+    ranks = [0.0] * n
+    i, tie_term = 0, 0.0
+    while i < n:
+        j = i
+        while j + 1 < n and abs(abs(d[order[j + 1]]) - abs(d[order[i]])) < 1e-12:
+            j += 1
+        avg = (i + j) / 2 + 1
+        for k in range(i, j + 1):
+            ranks[order[k]] = avg
+        t = j - i + 1
+        tie_term += t ** 3 - t
+        i = j + 1
+    w_plus = sum(r for r, x in zip(ranks, d) if x > 0)
+    w_minus = sum(r for r, x in zip(ranks, d) if x < 0)
+    mean = n * (n + 1) / 4
+    var = n * (n + 1) * (2 * n + 1) / 24 - tie_term / 48
+    z = (w_plus - mean) / math.sqrt(var) if var > 0 else 0.0
+    p = math.erfc(abs(z) / math.sqrt(2))
+    return {"n_nonzero": n, "w_plus": w_plus, "w_minus": w_minus, "z": z, "p": p}
 
 
 # ======================================================================
