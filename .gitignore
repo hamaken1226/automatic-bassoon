@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 .streamlit/secrets.toml
 
-# 再実験の書き起こし・採点結果（参加者の発話を含むため公開リポジトリに上げない）
+# 再実験の音声・書き起こし・採点結果（参加者の発話を含むため公開リポジトリに上げない）
 experiments/transcripts*.csv
 experiments/results/
+experiments/audio/

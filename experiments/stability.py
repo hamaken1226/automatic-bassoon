@@ -7,6 +7,10 @@ stability.py — 採点のぶれ（再現性）を検証する再実験スクリ
 書き起こしは固定して使う（Whisper を毎回かけ直さない）ので、測っているのは純粋に採点（LLM）側のぶれ。
 
 使い方:
+  0. 手動文字起こし用に音声をダウンロードする（ファイル名にセット名が付くので、transcripts.csv と対応づけやすい）
+       python experiments/stability.py download --users KentaH
+     → experiments/audio/KentaH_SetA_Q01.wav ...
+
   1. 書き起こしをスプレッドシートから CSV に書き出す（manual_transcript 列は空で出力される）
        python experiments/stability.py export
      → experiments/transcripts.csv ができる。音声を聞きながら manual_transcript 列を埋めれば手動文字起こし版になる。
@@ -56,6 +60,8 @@ DEFAULT_TRANSCRIPTS = EXP_DIR / "transcripts.csv"
 DEFAULT_RESULTS = EXP_DIR / "results" / "runs.jsonl"
 
 SHEET_NAME = "English_AI_Logs"
+BUCKET_NAME = "kentaengspeakingtest202605131619"
+SET_ORDER = ["Set A", "Set B", "Set C", "Set D"]
 CATEGORIES = ["時制", "主語と動詞の一致", "名詞の境界", "構文・語順"]
 ALL_CONDITIONS = ["baseline", "seed", "schema", "rules", "rules_perq"]
 SEED = 42
@@ -259,6 +265,99 @@ def open_sheet():
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     creds = service_account.Credentials.from_service_account_info(gcp_info, scopes=scopes)
     return gspread.authorize(creds).open(SHEET_NAME).sheet1
+
+
+def open_bucket():
+    from google.cloud import storage
+    from google.oauth2 import service_account
+    gcp_info = dict(load_secrets()["gcp_service_account"])
+    gcp_info["private_key"] = gcp_info["private_key"].replace("\\n", "\n")
+    creds = service_account.Credentials.from_service_account_info(
+        gcp_info, scopes=["https://www.googleapis.com/auth/cloud-platform"])
+    return storage.Client(credentials=creds, project=gcp_info["project_id"]).bucket(BUCKET_NAME)
+
+
+# ======================================================================
+# download: GCS の音声 → experiments/audio/（手動文字起こし用）
+# ======================================================================
+
+def parse_audio_name(name, user_id):
+    """{user}_{SetX}_Q{n}_... (新形式) または {user}_Q{n}_... (旧形式) を (set_name or None, q_num) に分解する"""
+    parts = name.split("_")
+    if parts[0] != user_id:
+        return None  # "KentaH2_..." のような別ユーザーを除外
+    set_name, q_num = None, None
+    for part in parts[1:]:
+        if part.startswith("Set") and len(part) == 4:
+            set_name = f"Set {part[3]}"
+        elif part.startswith("Q") and part[1:].isdigit():
+            q_num = int(part[1:])
+            break
+    return (set_name, q_num) if q_num else None
+
+
+def group_audio(blobs, user_id):
+    """
+    {(セット名, 問題番号): blob} を返す。同じ問題が複数あれば最新を使う。
+    旧形式（セット名なし）は reprocess.py と同じく、時刻順に並べて Q1 が出るたびに次のセットとみなす（A→B→C→D の順に受けた前提）。
+    """
+    files = {}
+    old = []
+    for blob in blobs:
+        parsed = parse_audio_name(blob.name, user_id)
+        if parsed is None:
+            continue
+        set_name, q_num = parsed
+        if set_name:
+            key = (set_name, q_num)
+            if key not in files or blob.updated > files[key].updated:
+                files[key] = blob
+        else:
+            old.append((q_num, blob))
+
+    old.sort(key=lambda x: x[1].updated)
+    sessions, current = [], {}
+    for q_num, blob in old:
+        if q_num == 1 and current:
+            sessions.append(current)
+            current = {}
+        if q_num not in current or blob.updated > current[q_num].updated:
+            current[q_num] = blob
+    if current:
+        sessions.append(current)
+
+    for i, sess in enumerate(sessions):
+        label = SET_ORDER[i] if i < len(SET_ORDER) else f"Session{i + 1}"
+        first = sess[min(sess)].updated.strftime("%m/%d %H:%M")
+        note = "" if i < len(SET_ORDER) else "  ⚠️ 5回目以降のセッション（やり直しの可能性。セットとの対応を確認すること）"
+        print(f"  旧形式 セッション{i + 1}（{first}〜, {len(sess)}問）→ {label}{note}")
+        for q_num, blob in sess.items():
+            files.setdefault((label, q_num), blob)
+    return files
+
+
+def cmd_download(args):
+    bucket = open_bucket()
+    out_dir = Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for user_id in args.users.split(","):
+        print(f"\n{user_id}:")
+        files = group_audio(bucket.list_blobs(prefix=f"{user_id}_"), user_id)
+        if not files:
+            print("  音声が見つかりません")
+            continue
+        for (set_name, q_num), blob in sorted(files.items()):
+            ext = blob.name.rsplit(".", 1)[-1] if "." in blob.name else "wav"
+            dest = out_dir / f"{user_id}_{set_name.replace(' ', '')}_Q{q_num:02d}.{ext}"
+            if dest.exists() and not args.force:
+                continue
+            blob.download_to_filename(str(dest))
+            print(f"  {dest.name}  ← {blob.name}")
+        for set_name in sorted({k[0] for k in files}):
+            n = sum(1 for k in files if k[0] == set_name)
+            if n != 10:
+                print(f"  ⚠️ {set_name}: {n}問しかありません")
+    print(f"\n保存先 → {out_dir}")
 
 
 # ======================================================================
@@ -576,6 +675,12 @@ def cmd_summarize(args):
 def main():
     p = argparse.ArgumentParser(description="採点のぶれ（再現性）の再実験")
     sub = p.add_subparsers(dest="cmd", required=True)
+
+    d = sub.add_parser("download", help="GCS の音声をセット名付きのファイル名でダウンロードする")
+    d.add_argument("--users", required=True, help="カンマ区切り（例: KentaH）")
+    d.add_argument("--out", default=str(EXP_DIR / "audio"))
+    d.add_argument("--force", action="store_true", help="既にあるファイルも上書きする")
+    d.set_defaults(func=cmd_download)
 
     e = sub.add_parser("export", help="スプレッドシートの書き起こしを CSV に書き出す")
     e.add_argument("--out", default=str(DEFAULT_TRANSCRIPTS))
