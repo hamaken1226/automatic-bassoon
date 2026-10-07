@@ -66,6 +66,10 @@ pip install -r requirements.txt
 
 # 1) スプレッドシートの書き起こしを CSV に書き出す
 python experiments/stability.py export
+
+# 1.5) 欠けている問題を GCS の音声から文字起こしし直して埋める（まず --dry-run で対象を確認）
+python experiments/stability.py transcribe --dry-run
+python experiments/stability.py transcribe
 #    → experiments/transcripts.csv（Excel で開ける）
 #      テスター×セットごとの問題数が表示されるので、10問そろっているか確認する
 
@@ -86,9 +90,11 @@ python experiments/stability.py summarize
 python experiments/stability.py run --runs 5
 ```
 
-- **データの内訳（2026-10-07 時点のシート）:** 10問そろっているセットは14セット。
-  P001（研究者本人）A〜D、HarunaK A〜D、HaruhiK A・C・D、MakoI A、TaiseiW A、KentaH A（研究者本人の2回目の Set A）。
-  HaruhiK B（6問）、MakoI B・C・D（6・1・7問）は欠けているため除外される。
+- **分析対象の参加者:** P001（研究者本人の Set A〜D）、HarunaK、HaruhiK、MakoI の4名（`--users` を省略するとこの4名）。
+  TaiseiW は Set A しか実施していないので含めない。KentaH は研究者本人の2回目の Set A なので既定では含めない。
+- **欠けているセット（2026-10-07 時点のシート）:** HaruhiK B（6問）、MakoI B・C・D（6・1・7問）。
+  `transcribe` で GCS の音声から文字起こしし直して埋める。以前の `reprocess.py` はセット名入りの新しいファイル名を拾えなかったため、
+  それが欠けの原因の可能性がある。`transcribe` は旧形式のファイルのセットを Q1 の文字起こしの中身（English / piano / town / guitar）から判定する。
 - シートの D 列に「手動チェック」列があると列が1つずれるが、`export` はどちらの並びでも読める。
   GCP の認証がない環境では、スプレッドシートを「ファイル → ダウンロード → CSV」で保存し、`export --from-csv <ファイル>` で読める。
 - 結果は `experiments/results/runs.jsonl` に1回ずつ追記される。途中で止めても、もう一度 `run` を実行すれば続きから再開できる。

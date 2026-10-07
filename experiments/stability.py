@@ -15,6 +15,10 @@ stability.py — 採点のぶれ（再現性）を検証する再実験スクリ
        python experiments/stability.py export
      → experiments/transcripts.csv ができる。音声を聞きながら manual_transcript 列を埋めれば手動文字起こし版になる。
 
+  1.5 抜けている問題を、GCS の音声から Whisper で文字起こしし直して埋める
+       python experiments/stability.py transcribe --dry-run   # 対象と音声の有無を確認
+       python experiments/stability.py transcribe
+
   2. 採点を繰り返す（結果は experiments/results/runs.jsonl に追記。途中で止めても続きから再開できる）
        python experiments/stability.py run --users KentaH --runs 5
        python experiments/stability.py run --text manual --users KentaH --runs 5
@@ -40,6 +44,7 @@ stability.py — 採点のぶれ（再現性）を検証する再実験スクリ
 
 import argparse
 import csv
+import io
 import json
 import statistics
 import sys
@@ -68,6 +73,9 @@ DEFAULT_RESULTS = EXP_DIR / "results" / "runs.jsonl"
 SHEET_NAME = "English_AI_Logs"
 BUCKET_NAME = "kentaengspeakingtest202605131619"
 SET_ORDER = ["Set A", "Set B", "Set C", "Set D"]
+# 分析対象の参加者（P001 = 研究者本人の Set A〜D）。TaiseiW は Set A しか実施していないので含めない。
+# KentaH は研究者本人の2回目の Set A なので、既定では含めない（--users で明示すれば使える）
+PARTICIPANTS = ["P001", "HarunaK", "HaruhiK", "MakoI"]
 # メインの比較（現状 + キーポイントの異なる3つのプロンプト）と、補助の分析用の条件
 MAIN_CONDITIONS = ["baseline", "a_rubric", "b_clause", "c_fewshot"]
 EXTRA_CONDITIONS = ["seed", "schema", "a_rubric_perq"]
@@ -196,13 +204,13 @@ def parse_audio_name(name, user_id):
     return (set_name, q_num) if q_num else None
 
 
-def group_audio(blobs, user_id):
+def split_audio(blobs, user_id):
     """
-    {(セット名, 問題番号): blob} を返す。同じ問題が複数あれば最新を使う。
-    旧形式（セット名なし）は reprocess.py と同じく、時刻順に並べて Q1 が出るたびに次のセットとみなす（A→B→C→D の順に受けた前提）。
+    (named, sessions) を返す。
+    named: 新形式（ファイル名にセット名あり）の {(セット名, 問題番号): blob}。同じ問題が複数あれば最新を使う
+    sessions: 旧形式（セット名なし）を時刻順に並べ、Q1 が出るたびに区切った [{問題番号: blob}, ...]
     """
-    files = {}
-    old = []
+    named, old = {}, []
     for blob in blobs:
         parsed = parse_audio_name(blob.name, user_id)
         if parsed is None:
@@ -210,8 +218,8 @@ def group_audio(blobs, user_id):
         set_name, q_num = parsed
         if set_name:
             key = (set_name, q_num)
-            if key not in files or blob.updated > files[key].updated:
-                files[key] = blob
+            if key not in named or blob.updated > named[key].updated:
+                named[key] = blob
         else:
             old.append((q_num, blob))
 
@@ -225,7 +233,15 @@ def group_audio(blobs, user_id):
             current[q_num] = blob
     if current:
         sessions.append(current)
+    return named, sessions
 
+
+def group_audio(blobs, user_id):
+    """
+    {(セット名, 問題番号): blob} を返す（download 用）。
+    旧形式は reprocess.py と同じく、時刻順で A→B→C→D に割り当てる（その順に受けた前提）。
+    """
+    files, sessions = split_audio(blobs, user_id)
     for i, sess in enumerate(sessions):
         label = SET_ORDER[i] if i < len(SET_ORDER) else f"Session{i + 1}"
         first = sess[min(sess)].updated.strftime("%m/%d %H:%M")
@@ -258,6 +274,124 @@ def cmd_download(args):
             if n != 10:
                 print(f"  ⚠️ {set_name}: {n}問しかありません")
     print(f"\n保存先 → {out_dir}")
+
+
+# ======================================================================
+# transcribe: GCS の音声を Whisper で文字起こしし直し、transcripts.csv の抜けを埋める
+# ======================================================================
+
+# 和文英訳の Q1・Q2 はセットごとに内容が違うので、文字起こしに出てくる語でセットを判定できる
+SET_KEYWORDS = {
+    1: {"Set A": ["english"], "Set B": ["piano"], "Set C": ["town", "city"], "Set D": ["guitar"]},
+    2: {"Set A": ["book"], "Set B": ["man ", "park"], "Set C": ["cake"], "Set D": ["restaurant"]},
+}
+
+
+def whisper(client, blob):
+    ext = blob.name.rsplit(".", 1)[-1] if "." in blob.name else "wav"
+    data = blob.download_as_bytes()
+    for attempt in range(4):
+        try:
+            with io.BytesIO(data) as f:
+                f.name = f"audio.{ext}"
+                return client.audio.transcriptions.create(model="whisper-1", file=f, language="en").text
+        except Exception as e:
+            if attempt == 3:
+                raise
+            print(f"    Whisper error ({e}), {2 ** attempt}秒後にリトライ...")
+            time.sleep(2 ** attempt)
+
+
+def classify_session(sess, transcribe):
+    """旧形式のセッションのセットを、Q1（なければ Q2）の文字起こしの中身から判定する。判定できなければ None"""
+    for q_num in (1, 2):
+        if q_num not in sess:
+            continue
+        text = transcribe(sess[q_num]).lower()
+        hits = [set_name for set_name, words in SET_KEYWORDS[q_num].items() if any(w in text for w in words)]
+        if len(hits) == 1:
+            return hits[0]
+    return None
+
+
+def read_transcript_rows(path):
+    if not Path(path).exists():
+        return {}
+    with open(path, encoding="utf-8-sig") as f:
+        return {(r["user_id"], r["set_name"], int(r["q_num"])): r for r in csv.DictReader(f)}
+
+
+def write_transcript_rows(path, rows):
+    records = sorted(rows.values(), key=lambda r: (r["user_id"], r["set_name"], int(r["q_num"])))
+    with open(path, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.DictWriter(f, fieldnames=CSV_FIELDS, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(records)
+
+
+def cmd_transcribe(args):
+    users = args.users.split(",") if args.users else PARTICIPANTS
+    path = Path(args.input)
+    rows = read_transcript_rows(path)
+    bucket = open_bucket()
+    client = None if args.dry_run else make_openai_client()
+    cache = {}
+
+    def transcribe(blob):
+        if blob.name not in cache:
+            cache[blob.name] = whisper(client, blob)
+        return cache[blob.name]
+
+    def needs(uid, set_name, q_num):
+        r = rows.get((uid, set_name, q_num))
+        return args.all or r is None or not (r.get("whisper_transcript") or "").strip()
+
+    for uid in users:
+        print(f"\n{uid}:")
+        named, sessions = split_audio(bucket.list_blobs(prefix=f"{uid}_"), uid)
+        files = dict(named)
+        for i, sess in enumerate(sessions, 1):
+            first = sess[min(sess)].updated.strftime("%m/%d %H:%M")
+            if args.dry_run:
+                print(f"  旧形式 セッション{i}（{first}〜, {len(sess)}問）: セットは本実行時に Q1 の中身から判定")
+                continue
+            set_name = classify_session(sess, transcribe)
+            if set_name is None:
+                print(f"  旧形式 セッション{i}（{first}〜, {len(sess)}問）→ セットを判定できないのでスキップ（旧バージョンの問題の可能性）")
+                continue
+            print(f"  旧形式 セッション{i}（{first}〜, {len(sess)}問）→ {set_name}（Q1 の中身から判定）")
+            for q_num, blob in sess.items():  # 同じセットを複数回受けていたら、問題ごとに新しい録音を使う
+                key = (set_name, q_num)
+                if key not in files or blob.updated > files[key].updated:
+                    files[key] = blob
+
+        for set_name in SET_ORDER:
+            todo = [q for q in range(1, 11) if needs(uid, set_name, q)]
+            if not todo:
+                continue
+            missing_audio = [q for q in todo if (set_name, q) not in files]
+            ready = [q for q in todo if (set_name, q) in files]
+            note = "（旧形式の音声はまだセットを判定していないので含まれない）" if args.dry_run and sessions else ""
+            print(f"  {set_name}: 文字起こし対象 Q{ready}" + (f" / 音声が見つからない Q{missing_audio}{note}" if missing_audio else ""))
+            if args.dry_run:
+                continue
+            for q_num in ready:
+                blob = files[(set_name, q_num)]
+                text = transcribe(blob)
+                q = ALL_QUESTIONS[set_name][q_num - 1]
+                row = rows.get((uid, set_name, q_num)) or {
+                    "user_id": uid, "set_name": set_name, "q_num": q_num, "type": q["type"],
+                    "question": q["q"], "manual_transcript": "",
+                }
+                row.update({"whisper_transcript": text, "sheet_timestamp": f"rerun:{blob.name}"})
+                rows[(uid, set_name, q_num)] = row
+                print(f"    Q{q_num}: {text[:60]}")
+            write_transcript_rows(path, rows)  # セットごとに保存（途中で止まっても失われない）
+
+    if args.dry_run:
+        print("\n（--dry-run なので文字起こしはしていません）")
+    else:
+        print(f"\n保存先 → {path}（sheet_timestamp が rerun: で始まる行が今回の文字起こし）")
 
 
 # ======================================================================
@@ -465,8 +599,8 @@ def cmd_run(args):
     text_col = "whisper_transcript" if args.text == "whisper" else "manual_transcript"
 
     sessions = load_transcripts(args.input, text_col)
-    if args.users:
-        sessions = {k: v for k, v in sessions.items() if k[0] in args.users.split(",")}
+    users = args.users.split(",") if args.users else PARTICIPANTS
+    sessions = {k: v for k, v in sessions.items() if k[0] in users}
     if args.sets:
         sessions = {k: v for k, v in sessions.items() if k[1] in [s.strip() for s in args.sets.split(",")]}
     incomplete = sorted(k for k, v in sessions.items() if sum(1 for q in v if q["answer"]) < args.min_questions)
@@ -620,6 +754,13 @@ def main():
     d.add_argument("--force", action="store_true", help="既にあるファイルも上書きする")
     d.set_defaults(func=cmd_download)
 
+    t = sub.add_parser("transcribe", help="GCS の音声を Whisper で文字起こしし直し、transcripts.csv の抜けを埋める")
+    t.add_argument("--users", help=f"カンマ区切り（既定: {','.join(PARTICIPANTS)}）")
+    t.add_argument("--input", default=str(DEFAULT_TRANSCRIPTS))
+    t.add_argument("--all", action="store_true", help="抜けだけでなく、全問を文字起こしし直す")
+    t.add_argument("--dry-run", action="store_true", help="API を呼ばず、対象と音声の有無だけ表示する")
+    t.set_defaults(func=cmd_transcribe)
+
     e = sub.add_parser("export", help="スプレッドシートの書き起こしを CSV に書き出す")
     e.add_argument("--out", default=str(DEFAULT_TRANSCRIPTS))
     e.add_argument("--force", action="store_true", help="既存の CSV を上書きする")
@@ -633,7 +774,7 @@ def main():
     r.add_argument("--conditions", default=",".join(MAIN_CONDITIONS),
                    help=f"カンマ区切り。既定はメインの4条件。選べるのは {ALL_CONDITIONS}")
     r.add_argument("--runs", type=int, default=5)
-    r.add_argument("--users", help="カンマ区切りで対象テスターを絞る（例: KentaH）")
+    r.add_argument("--users", help=f"カンマ区切りで対象テスターを指定（既定: {','.join(PARTICIPANTS)}）")
     r.add_argument("--sets", help='カンマ区切りで対象セットを絞る（例: "Set A,Set B"）')
     r.add_argument("--model", default="gpt-4o")
     r.add_argument("--margin", type=float, default=15.0, help="化石化判定: 全体平均 + 何ポイントか")
