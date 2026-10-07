@@ -70,21 +70,27 @@ python experiments/stability.py export
 #      テスター×セットごとの問題数が表示されるので、10問そろっているか確認する
 
 # 2) Whisper の書き起こしで、メインの4条件（baseline, A, B, C）を5回ずつ採点（まず自分のデータだけで試す）
-python experiments/stability.py run --users KentaH --runs 5
+#    研究者本人の Set A〜D は ID「P001」（6月実施）。「KentaH」は6/22の Set A のみ
+python experiments/stability.py run --users P001 --runs 5
 #    補助の分析も行う場合
-python experiments/stability.py run --users KentaH --runs 5 --conditions seed,schema,a_rubric_perq
+python experiments/stability.py run --users P001 --runs 5 --conditions seed,schema,a_rubric_perq
 
 # 3) 集計（条件ごとの比較表が表示され、CSV も出力される）
 python experiments/stability.py summarize
 
 # 4) 手動文字起こしを transcripts.csv の manual_transcript 列に入力したら、同じように採点
-python experiments/stability.py run --text manual --users KentaH --runs 5
+python experiments/stability.py run --text manual --users P001 --runs 5
 python experiments/stability.py summarize
 
 # 5) うまくいったら全テスターに広げる
 python experiments/stability.py run --runs 5
 ```
 
+- **データの内訳（2026-10-07 時点のシート）:** 10問そろっているセットは14セット。
+  P001（研究者本人）A〜D、HarunaK A〜D、HaruhiK A・C・D、MakoI A、TaiseiW A、KentaH A（研究者本人の2回目の Set A）。
+  HaruhiK B（6問）、MakoI B・C・D（6・1・7問）は欠けているため除外される。
+- シートの D 列に「手動チェック」列があると列が1つずれるが、`export` はどちらの並びでも読める。
+  GCP の認証がない環境では、スプレッドシートを「ファイル → ダウンロード → CSV」で保存し、`export --from-csv <ファイル>` で読める。
 - 結果は `experiments/results/runs.jsonl` に1回ずつ追記される。途中で止めても、もう一度 `run` を実行すれば続きから再開できる。
 - `summarize --margin 20` のように指定すると、化石化のしきい値を変えて集計し直せる（API は呼ばない）。
   しきい値の感度分析にも使える。
@@ -106,7 +112,7 @@ python experiments/stability.py run --runs 5
 3. **再実験の設計（1〜2枚）:** 現状＋3つのプロンプト（§2 の表）と、測る指標（§3）。
 4. **予備結果（1枚、間に合えば）:** 自分の Set A だけでも、メインの4条件を5回ずつ採点し、SD と化石化一致率を比べる。
    最小構成なら次の1行で10分程度:
-   `python experiments/stability.py run --users KentaH --sets "Set A" --runs 5`
+   `python experiments/stability.py run --users P001 --sets "Set A" --runs 5`
 5. **手動文字起こしの状況（1枚）:** 何セット分終わったか。Whisper との差（気づいた例）。
 6. **今後のスケジュール（1枚）:** §6。
 

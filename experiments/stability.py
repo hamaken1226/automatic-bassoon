@@ -34,7 +34,8 @@ stability.py — 採点のぶれ（再現性）を検証する再実験スクリ
     a_rubric_perq プロンプトA を1問ずつ別々に採点して合算
   baseline 以外はすべて seed を固定し、フィードバック文は生成させない。
 
-注意: .streamlit/secrets.toml（OPENAI_API_KEY, gcp_service_account）が必要。export のみ GCP 認証を使う。
+注意: .streamlit/secrets.toml（OPENAI_API_KEY, gcp_service_account）が必要。
+      OPENAI_API_KEY は環境変数でもよい。export は --from-csv を付ければ GCP 認証なしで動く。
 """
 
 import argparse
@@ -150,8 +151,10 @@ def load_secrets():
 
 
 def make_openai_client():
+    import os
     from openai import OpenAI
-    return OpenAI(api_key=load_secrets()["OPENAI_API_KEY"])
+    key = os.environ.get("OPENAI_API_KEY") or load_secrets()["OPENAI_API_KEY"]
+    return OpenAI(api_key=key)
 
 
 def open_sheet():
@@ -264,14 +267,31 @@ def cmd_download(args):
 CSV_FIELDS = ["user_id", "set_name", "q_num", "type", "question", "whisper_transcript", "manual_transcript", "sheet_timestamp"]
 
 
+def find_question(row):
+    """問題文の列を探して (列番号, 問題情報) を返す。
+    アプリは [日時, ID, 問題番号, 問題文, raw, cleaned] の順に書き込むが、シートの D 列に「手動チェック」列が
+    挿入されていると1列ずつ右にずれる（問題文が E 列、raw が F 列）。どちらの並びでも読めるようにする。"""
+    for col in (3, 4):
+        if len(row) > col + 1 and row[col] in QUESTION_INDEX:
+            return col, QUESTION_INDEX[row[col]]
+    return None, None
+
+
+def read_sheet_rows(args):
+    if args.from_csv:  # Google スプレッドシートの「ファイル → ダウンロード → CSV」で保存したもの
+        with open(args.from_csv, encoding="utf-8-sig") as f:
+            return list(csv.reader(f))
+    return open_sheet().get_all_values()
+
+
 def cmd_export(args):
-    rows = open_sheet().get_all_values()
+    rows = read_sheet_rows(args)
     latest = {}
     skipped = 0
     for row in rows:
         if len(row) < 5 or row[2] in ("FINAL", ""):
             continue
-        info = QUESTION_INDEX.get(row[3])
+        col, info = find_question(row)
         if info is None:
             skipped += 1  # ヘッダー行や、旧バージョンの問題文
             continue
@@ -281,7 +301,7 @@ def cmd_export(args):
         if key not in latest or row[0] >= latest[key]["sheet_timestamp"]:
             latest[key] = {
                 "user_id": row[1], "set_name": set_name, "q_num": q_num, "type": q_type,
-                "question": row[3], "whisper_transcript": row[4], "manual_transcript": "",
+                "question": row[col], "whisper_transcript": row[col + 1], "manual_transcript": "",
                 "sheet_timestamp": row[0],
             }
 
@@ -603,6 +623,7 @@ def main():
     e = sub.add_parser("export", help="スプレッドシートの書き起こしを CSV に書き出す")
     e.add_argument("--out", default=str(DEFAULT_TRANSCRIPTS))
     e.add_argument("--force", action="store_true", help="既存の CSV を上書きする")
+    e.add_argument("--from-csv", help="GCP 認証を使わず、スプレッドシートから手動でダウンロードした CSV を読む")
     e.set_defaults(func=cmd_export)
 
     r = sub.add_parser("run", help="条件ごとに N 回採点する")
