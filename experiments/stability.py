@@ -350,6 +350,7 @@ def cmd_transcribe(args):
         print(f"\n{uid}:")
         named, sessions = split_audio(bucket.list_blobs(prefix=f"{uid}_"), uid)
         files = dict(named)
+        by_set = defaultdict(list)
         for i, sess in enumerate(sessions, 1):
             first = sess[min(sess)].updated.strftime("%m/%d %H:%M")
             if args.dry_run:
@@ -360,10 +361,25 @@ def cmd_transcribe(args):
                 print(f"  旧形式 セッション{i}（{first}〜, {len(sess)}問）→ セットを判定できないのでスキップ（旧バージョンの問題の可能性）")
                 continue
             print(f"  旧形式 セッション{i}（{first}〜, {len(sess)}問）→ {set_name}（Q1 の中身から判定）")
-            for q_num, blob in sess.items():  # 同じセットを複数回受けていたら、問題ごとに新しい録音を使う
-                key = (set_name, q_num)
-                if key not in files or blob.updated > files[key].updated:
-                    files[key] = blob
+            by_set[set_name].append((i, sess))
+
+        # 同じセットを複数回受けている場合（途中でやめて受け直した場合など）は、10問そろった回のうち最新の回を丸ごと使う。
+        # 10問そろった回がなければ、問題ごとに最新の録音を使う
+        for set_name, cands in by_set.items():
+            complete = [(i, sess) for i, sess in cands if all(q in sess for q in range(1, 11))]
+            if complete:
+                i, chosen = max(complete, key=lambda c: max(b.updated for b in c[1].values()))
+                if len(cands) > 1:
+                    print(f"  {set_name}: {len(cands)}回分の録音のうち、10問そろった最新のセッション{i}を使用")
+                for q_num, blob in chosen.items():
+                    if (set_name, q_num) not in files or blob.updated > files[(set_name, q_num)].updated:
+                        files[(set_name, q_num)] = blob
+            else:
+                print(f"  {set_name}: 10問そろった回がないので、問題ごとに最新の録音を使用")
+                for _, sess in cands:
+                    for q_num, blob in sess.items():
+                        if (set_name, q_num) not in files or blob.updated > files[(set_name, q_num)].updated:
+                            files[(set_name, q_num)] = blob
 
         for set_name in SET_ORDER:
             todo = [q for q in range(1, 11) if needs(uid, set_name, q)]
