@@ -286,6 +286,20 @@ SET_KEYWORDS = {
     2: {"Set A": ["book"], "Set B": ["man ", "park"], "Set C": ["cake"], "Set D": ["restaurant"]},
 }
 
+# Q1・Q2 で判定できないときに使う、各セットの問いに特有の語（問題番号ごと）
+QUESTION_KEYWORDS = {
+    "Set A": {1: ["english"], 2: ["book"], 3: ["my name", "years old"], 4: ["free time"], 5: ["best friend", "weekend"],
+              6: ["last weekend"], 7: ["lived", "live in"], 8: ["influence"], 9: ["food"], 10: ["five years", "5 years"]},
+    "Set B": {1: ["piano"], 2: ["man ", "park"], 3: ["hometown"], 4: ["relax"], 5: ["mother", "father", "mom", "dad"],
+              6: ["vacation"], 7: ["hobby", "long time"], 8: ["movie", "book"], 9: ["countryside"], 10: ["money"]},
+    "Set C": {1: ["town", "city", "five years", "5 years"], 2: ["cake"], 3: ["interest"], 4: ["language"],
+              5: ["classmate", "coworker", "co-worker"], 6: ["high school"], 7: ["university"], 8: ["visit"],
+              9: ["youtube"], 10: ["job"]},
+    "Set D": {1: ["guitar"], 2: ["restaurant"], 3: ["season", "winter", "summer", "spring", "autumn"], 4: ["healthy", "health"],
+              5: ["admire"], 6: ["childhood", "memory"], 7: ["sport", "habit"], 8: ["problem", "solve"], 9: ["stress"],
+              10: ["technology"]},
+}
+
 
 def whisper(client, blob):
     ext = blob.name.rsplit(".", 1)[-1] if "." in blob.name else "wav"
@@ -303,15 +317,48 @@ def whisper(client, blob):
 
 
 def classify_session(sess, transcribe):
-    """旧形式のセッションのセットを、Q1（なければ Q2）の文字起こしの中身から判定する。判定できなければ None"""
+    """
+    旧形式のセッションのセットを、文字起こしの中身から判定する。(セット名, 判定方法) を返す。判定できなければ (None, 理由)。
+    まず Q1（なければ Q2）の和文英訳で判定し、だめなら全問の答えに各セット特有の語が出てくるかで点数を付ける
+    （Q1・Q2 の一致は3点、Q3 以降は1点。最高点が4点以上で、2位と2点以上の差があれば採用）。
+    """
     for q_num in (1, 2):
         if q_num not in sess:
             continue
         text = transcribe(sess[q_num]).lower()
         hits = [set_name for set_name, words in SET_KEYWORDS[q_num].items() if any(w in text for w in words)]
         if len(hits) == 1:
-            return hits[0]
-    return None
+            return hits[0], f"Q{q_num} の中身から判定"
+
+    scores = {set_name: 0 for set_name in SET_ORDER}
+    for q_num, blob in sess.items():
+        text = transcribe(blob).lower()
+        for set_name in SET_ORDER:
+            if any(w in text for w in QUESTION_KEYWORDS[set_name].get(q_num, [])):
+                scores[set_name] += 3 if q_num in (1, 2) else 1
+    ranked = sorted(scores.items(), key=lambda kv: -kv[1])
+    detail = " ".join(f"{k[-1]}={v}" for k, v in scores.items())
+    if ranked[0][1] >= 4 and ranked[0][1] - ranked[1][1] >= 2:
+        return ranked[0][0], f"全問の中身から判定（点数 {detail}）"
+    return None, f"点数 {detail}"
+
+
+def parse_assign(text):
+    """--assign "MakoI:7=B,HarunaK:3=C" → {("MakoI", 7): "Set B", ("HarunaK", 3): "Set C"}"""
+    result = {}
+    for part in (text or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            who, letter = part.split("=")
+            uid, idx = who.split(":")
+            letter = letter.strip().upper().replace("SET", "").strip()
+            assert letter in "ABCD" and len(letter) == 1
+            result[(uid.strip(), int(idx))] = f"Set {letter}"
+        except (ValueError, AssertionError):
+            sys.exit(f"--assign の書き方が違います: {part}（例: MakoI:7=B）")
+    return result
 
 
 def read_transcript_rows(path):
@@ -331,6 +378,8 @@ def write_transcript_rows(path, rows):
 
 def cmd_transcribe(args):
     users = args.users.split(",") if args.users else PARTICIPANTS
+    target_sets = [x.strip() for x in args.sets.split(",")] if args.sets else SET_ORDER
+    assign = parse_assign(args.assign)
     path = Path(args.input)
     rows = read_transcript_rows(path)
     bucket = open_bucket()
@@ -354,13 +403,17 @@ def cmd_transcribe(args):
         for i, sess in enumerate(sessions, 1):
             first = sess[min(sess)].updated.strftime("%m/%d %H:%M")
             if args.dry_run:
-                print(f"  旧形式 セッション{i}（{first}〜, {len(sess)}問）: セットは本実行時に Q1 の中身から判定")
+                label = f"→ {assign[(uid, i)]}（--assign で指定）" if (uid, i) in assign else ": セットは本実行時に中身から判定"
+                print(f"  旧形式 セッション{i}（{first}〜, {len(sess)}問）{label}")
                 continue
-            set_name = classify_session(sess, transcribe)
+            if (uid, i) in assign:
+                set_name, how = assign[(uid, i)], "--assign で指定"
+            else:
+                set_name, how = classify_session(sess, transcribe)
             if set_name is None:
-                print(f"  旧形式 セッション{i}（{first}〜, {len(sess)}問）→ セットを判定できないのでスキップ（旧バージョンの問題の可能性）")
+                print(f"  旧形式 セッション{i}（{first}〜, {len(sess)}問）→ セットを判定できないのでスキップ（{how}）")
                 continue
-            print(f"  旧形式 セッション{i}（{first}〜, {len(sess)}問）→ {set_name}（Q1 の中身から判定）")
+            print(f"  旧形式 セッション{i}（{first}〜, {len(sess)}問）→ {set_name}（{how}）")
             by_set[set_name].append((i, sess))
 
         # 同じセットを複数回受けている場合（途中でやめて受け直した場合など）は、10問そろった回のうち最新の回を丸ごと使う。
@@ -381,7 +434,7 @@ def cmd_transcribe(args):
                         if (set_name, q_num) not in files or blob.updated > files[(set_name, q_num)].updated:
                             files[(set_name, q_num)] = blob
 
-        for set_name in SET_ORDER:
+        for set_name in target_sets:
             todo = [q for q in range(1, 11) if needs(uid, set_name, q)]
             if not todo:
                 continue
@@ -775,6 +828,8 @@ def main():
     t.add_argument("--input", default=str(DEFAULT_TRANSCRIPTS))
     t.add_argument("--all", action="store_true", help="抜けだけでなく、全問を文字起こしし直す")
     t.add_argument("--dry-run", action="store_true", help="API を呼ばず、対象と音声の有無だけ表示する")
+    t.add_argument("--sets", help='カンマ区切りで対象セットを絞る（例: "Set B,Set C"）')
+    t.add_argument("--assign", help="セッションのセットを手動で指定する（例: HarunaK:3=C,MakoI:7=B。番号は表示されるセッション番号）")
     t.set_defaults(func=cmd_transcribe)
 
     e = sub.add_parser("export", help="スプレッドシートの書き起こしを CSV に書き出す")
