@@ -89,6 +89,8 @@ python experiments/stability.py compare     # results/gold_rates.json（基準�
 - 観点別の平均エラー率：D は一致 11.6%（B の 16.8% から減ったが、基準データ 1.8% より高い）、E は一致 4.6%・構文 10.1%（C の 7.3%・13.2% から減少）。
 - 正確さは `reference_scoring.md` §3。E が最も基準データに近い（平均絶対誤差 3.3pt）。
 - D・E と C の安定性の差の検定：`summarize --ref baseline,c_fewshot`【要データ】
+- D・E のしきい値の感度分析（＋10・＋20pt で判定が割れたセル数）：`summarize --margin 10` / `--margin 20`【要データ】
+- 論文草稿には第2弾の結果を反映済み（第5〜8章・要旨、2026-11-03）。
 
 ## 3. 測る指標
 
