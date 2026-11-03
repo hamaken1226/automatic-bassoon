@@ -88,8 +88,21 @@ python experiments/stability.py compare     # results/gold_rates.json（基準�
 - Wilcoxon（baseline 比）：D・E とも p < .001（SD の中央値 5.1 → 1.9）。
 - 観点別の平均エラー率：D は一致 11.6%（B の 16.8% から減ったが、基準データ 1.8% より高い）、E は一致 4.6%・構文 10.1%（C の 7.3%・13.2% から減少）。
 - 正確さは `reference_scoring.md` §3。E が最も基準データに近い（平均絶対誤差 3.3pt）。
-- D・E と C の安定性の差の検定：`summarize --ref baseline,c_fewshot`【要データ】
-- D・E のしきい値の感度分析（＋10・＋20pt で判定が割れたセル数）：`summarize --margin 10` / `--margin 20`【要データ】
+- C との比較（Wilcoxon、`summarize --ref baseline,c_fewshot`、2026-11-03）：
+  D は SD の中央値 2.5 → 1.9（n=58, z=−2.37, p=.018）、E は 2.5 → 1.9（n=54, z=−2.42, p=.016）でいずれも C より有意に小さい
+  （C との比較2回の Bonferroni 補正 α=.025 でも有意）。B と C は有意差なし（p=.559）。
+- しきい値の感度分析（判定が割れたセル数、60セル中）：
+
+| 条件 | ＋10pt | ＋15pt | ＋20pt |
+|---|---|---|---|
+| baseline | 21 | 15 | 11 |
+| a_rubric | 14 | 16 | 16 |
+| b_clause | 12 | 6 | 2 |
+| c_fewshot | 5 | 3 | 3 |
+| d_clause_fewshot | 6 | 1 | 0 |
+| e_fewshot_plus | **4** | 2 | **0** |
+
+  E はどのしきい値でも4以下で最も少ない。D は＋10pt では6（C と同程度）。
 - 論文草稿には第2弾の結果を反映済み（第5〜8章・要旨、2026-11-03）。
 
 ## 3. 測る指標
