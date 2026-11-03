@@ -78,6 +78,18 @@ python experiments/stability.py summarize
 python experiments/stability.py compare     # results/gold_rates.json（基準データの集計値）を置いておく
 ```
 
+### 第2弾の結果（2026-11-03、15セット × 5回）
+
+| 条件 | エラー率SD | 幅 | 文脈数SD | 全体SD | 化石化一致率 | 判定が割れたセル |
+|---|---|---|---|---|---|---|
+| d_clause_fewshot（D 手順＋採点例） | **2.0** | **4.8** | 5.7 | **1.0** | **100%** | **1/60** |
+| e_fewshot_plus（E 採点例＋対象外の例） | 2.2 | 5.2 | 4.8 | 1.6 | 99% | 2/60 |
+
+- Wilcoxon（baseline 比）：D・E とも p < .001（SD の中央値 5.1 → 1.9）。
+- 観点別の平均エラー率：D は一致 11.6%（B の 16.8% から減ったが、基準データ 1.8% より高い）、E は一致 4.6%・構文 10.1%（C の 7.3%・13.2% から減少）。
+- 正確さは `reference_scoring.md` §3。E が最も基準データに近い（平均絶対誤差 3.3pt）。
+- D・E と C の安定性の差の検定：`summarize --ref baseline,c_fewshot`【要データ】
+
 ## 3. 測る指標
 
 同じ書き起こしを各条件で N 回（基本は5回）採点し、テスター×セット×観点ごとに集計する。

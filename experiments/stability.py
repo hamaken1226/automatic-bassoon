@@ -887,29 +887,38 @@ def cmd_summarize(args):
             for line in cells:
                 print(f"      {line}")
 
-    # 検定: 同じセル（参加者×セット×観点）について、baseline と各条件のエラー率SDを比べる（Wilcoxon の符号付き順位検定）
+    # 検定: 同じセル（参加者×セット×観点）について、基準の条件（既定は baseline）と各条件のエラー率SDを比べる
+    # （Wilcoxon の符号付き順位検定）。--ref baseline,c_fewshot のように複数指定すると、それぞれと比べる
     test_rows = []
+    refs = [x.strip() for x in args.ref.split(",") if x.strip()]
     for text in sorted({r["text"] for r in cell_rows}):
-        base = {(r["user_id"], r["set_name"], r["category"]): r["rate_sd"]
-                for r in cell_rows if r["condition"] == "baseline" and r["text"] == text}
-        for cond in ALL_CONDITIONS:
-            if cond == "baseline":
+        for ref in refs:
+            base = {(r["user_id"], r["set_name"], r["category"]): r["rate_sd"]
+                    for r in cell_rows if r["condition"] == ref and r["text"] == text}
+            if not base:
                 continue
-            other = {(r["user_id"], r["set_name"], r["category"]): r["rate_sd"]
-                     for r in cell_rows if r["condition"] == cond and r["text"] == text}
-            keys = sorted(set(base) & set(other))
-            if len(keys) < 6:
-                continue
-            res = wilcoxon_signed_rank([other[k] - base[k] for k in keys])
-            test_rows.append({"text": text, "condition": cond, "pairs": len(keys),
-                              "median_sd_baseline": statistics.median(base[k] for k in keys),
-                              "median_sd_condition": statistics.median(other[k] for k in keys), **res})
-    if test_rows:
-        print("\n【検定】 観点ごとのエラー率SD を baseline と比べた結果（Wilcoxon の符号付き順位検定、両側、正規近似）")
-        for r in test_rows:
+            for cond in ALL_CONDITIONS:
+                if cond == ref:
+                    continue
+                other = {(r["user_id"], r["set_name"], r["category"]): r["rate_sd"]
+                         for r in cell_rows if r["condition"] == cond and r["text"] == text}
+                keys = sorted(set(base) & set(other))
+                if len(keys) < 6:
+                    continue
+                res = wilcoxon_signed_rank([other[k] - base[k] for k in keys])
+                test_rows.append({"text": text, "ref": ref, "condition": cond, "pairs": len(keys),
+                                  "median_sd_ref": statistics.median(base[k] for k in keys),
+                                  "median_sd_condition": statistics.median(other[k] for k in keys), **res})
+    for ref in refs:
+        rows_ref = [r for r in test_rows if r["ref"] == ref]
+        if not rows_ref:
+            continue
+        print(f"\n【検定】 観点ごとのエラー率SD を {ref} と比べた結果（Wilcoxon の符号付き順位検定、両側、正規近似）")
+        for r in rows_ref:
             sig = "有意" if r["p"] < 0.05 else "有意差なし"
-            print(f"  [{r['text']}] {r['condition']:<14} SDの中央値 {r['median_sd_baseline']:.1f} → {r['median_sd_condition']:.1f}"
-                  f"  （n={r['n_nonzero']}, z={r['z']:.2f}, p={r['p']:.4f}, {sig}）")
+            direction = "小さい" if r["z"] < 0 else "大きい"
+            print(f"  [{r['text']}] {r['condition']:<16} SDの中央値 {r['median_sd_ref']:.1f} → {r['median_sd_condition']:.1f}"
+                  f"  （n={r['n_nonzero']}, z={r['z']:.2f}, p={r['p']:.4f}, {sig}{'・' + ref + 'より' + direction if r['p'] < 0.05 else ''}）")
 
     for name, rows in [("summary_categories.csv", cat_rows), ("summary_tests.csv", test_rows)]:
         if not rows:
@@ -1065,6 +1074,7 @@ def main():
     s.add_argument("--out-dir", default=str(EXP_DIR / "results"))
     s.add_argument("--model", help="特定のモデルの結果だけ集計する")
     s.add_argument("--margin", type=float, default=15.0, help="化石化判定: 全体平均 + 何ポイントか（後から変えて集計し直せる）")
+    s.add_argument("--ref", default="baseline", help="検定で比べる相手の条件（カンマ区切りで複数可。例: baseline,c_fewshot）")
     s.set_defaults(func=cmd_summarize)
 
     g = sub.add_parser("compare", help="基準データ（gold_rates.json）と各条件の採点を比べる（正確さ）")
