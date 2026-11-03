@@ -10,6 +10,10 @@ prompts.py — 再実験で比較する採点プロンプト。
 A と C は同じ出力形式（ITEM_SCHEMA）、B は節ごとの出力形式（CLAUSE_SCHEMA）。
 件数・エラー率・化石化判定は、どのプロンプトでも Python 側で計算する。
 
+第2弾（第1弾の結果を踏まえた改良版）:
+  d_clause_fewshot  プロンプトD「手順＋採点例」: B の手順に、C の採点例を節ごとの形にして組み合わせる
+  e_fewshot_plus    プロンプトE「採点例＋対象外の例」: C に、数えないもの・一致の正しい例を示す3つ目の採点例を足す
+
 補助の分析用（改善のうち、どこまでが乱数の固定や出力形式の効果かを切り分ける）:
   seed       baseline + seed 固定
   schema     A/C と同じ出力形式だが、定義も例もない最小限のプロンプト（SCHEMA_PROMPT）
@@ -209,6 +213,114 @@ Q6: What did you do last weekend? Please explain in detail.
  {"category": "構文・語順", "q": "Q6", "quote": "We watched movie", "is_error": false, "correction": ""},
  {"category": "時制", "q": "Q6", "quote": "I very enjoyed", "is_error": false, "correction": ""},
  {"category": "構文・語順", "q": "Q6", "quote": "I very enjoyed it", "is_error": true, "correction": "I enjoyed it very much"}
+]}
+"""
+
+
+# ======================================================================
+# 第2弾 プロンプトD「手順＋採点例」
+# キーポイント: 第1弾で B は「何を数えるか」（必須文脈数）が最も安定し、C は値の水準と化石化判定が基準データに最も近かった。
+#               B の手順はそのままに、C と同じ2つの採点例を節ごとの出力形式で示し、両方の長所を取る。
+# ======================================================================
+
+CLAUSE_FEWSHOT_PROMPT = CLAUSE_PROMPT + """
+【採点例】以下の例と同じ考え方・同じ細かさで、節に分けて採点すること。
+
+＜例1の入力＞
+Q5: Tell me about what your best friend usually does on weekends.
+回答: My friend usually play soccer in the park. He go... he goes to a café after that. He likes coffee very much.
+
+＜例1の解説＞
+- "play" は3単現の s が抜けている。誤りは agreement にだけ記録し、tense は正しいとする。
+- "He go... he goes" は言い直しなので、言い直した後の形で節を作り、tense と agreement は applicable=false にする。同じ節の名詞句と構文は通常どおり確認する。
+- "that" は代名詞なので名詞句に挙げない。"soccer" "coffee" は無冠詞で正しい。
+
+＜例1の出力＞
+{"clauses": [
+ {"q": "Q5", "text": "My friend usually play soccer in the park", "skip": false,
+  "tense": {"applicable": true, "is_error": false, "correction": ""},
+  "agreement": {"applicable": true, "is_error": true, "correction": "My friend usually plays"},
+  "noun_phrases": [{"quote": "My friend", "is_error": false, "correction": ""}, {"quote": "soccer", "is_error": false, "correction": ""}, {"quote": "the park", "is_error": false, "correction": ""}],
+  "syntax": {"applicable": true, "is_error": false, "correction": ""}},
+ {"q": "Q5", "text": "he goes to a café after that", "skip": false,
+  "tense": {"applicable": false, "is_error": false, "correction": ""},
+  "agreement": {"applicable": false, "is_error": false, "correction": ""},
+  "noun_phrases": [{"quote": "a café", "is_error": false, "correction": ""}],
+  "syntax": {"applicable": true, "is_error": false, "correction": ""}},
+ {"q": "Q5", "text": "He likes coffee very much", "skip": false,
+  "tense": {"applicable": true, "is_error": false, "correction": ""},
+  "agreement": {"applicable": true, "is_error": false, "correction": ""},
+  "noun_phrases": [{"quote": "coffee", "is_error": false, "correction": ""}],
+  "syntax": {"applicable": true, "is_error": false, "correction": ""}}
+]}
+
+＜例2の入力＞
+Q6: What did you do last weekend? Please explain in detail.
+回答: Last weekend I go to Shibuya with my sister. We watched movie. I very enjoyed it.
+
+＜例2の解説＞
+- "I go" は過去のことなので tense の誤り。tense が誤っている動詞は agreement を applicable=false にする。
+- "watched" "enjoyed" は一般動詞の過去形なので agreement は applicable=false。
+- "Shibuya" は固有名詞、"it" は代名詞なので名詞句に挙げない。"movie" は冠詞が抜けている。
+- "I very enjoyed it" は副詞の位置の誤りなので syntax の誤り。
+
+＜例2の出力＞
+{"clauses": [
+ {"q": "Q6", "text": "Last weekend I go to Shibuya with my sister", "skip": false,
+  "tense": {"applicable": true, "is_error": true, "correction": "Last weekend I went to Shibuya with my sister"},
+  "agreement": {"applicable": false, "is_error": false, "correction": ""},
+  "noun_phrases": [{"quote": "Last weekend", "is_error": false, "correction": ""}, {"quote": "my sister", "is_error": false, "correction": ""}],
+  "syntax": {"applicable": true, "is_error": false, "correction": ""}},
+ {"q": "Q6", "text": "We watched movie", "skip": false,
+  "tense": {"applicable": true, "is_error": false, "correction": ""},
+  "agreement": {"applicable": false, "is_error": false, "correction": ""},
+  "noun_phrases": [{"quote": "movie", "is_error": true, "correction": "a movie"}],
+  "syntax": {"applicable": true, "is_error": false, "correction": ""}},
+ {"q": "Q6", "text": "I very enjoyed it", "skip": false,
+  "tense": {"applicable": true, "is_error": false, "correction": ""},
+  "agreement": {"applicable": false, "is_error": false, "correction": ""},
+  "noun_phrases": [],
+  "syntax": {"applicable": true, "is_error": true, "correction": "I enjoyed it very much"}}
+]}
+"""
+
+
+# ======================================================================
+# 第2弾 プロンプトE「採点例＋対象外の例」
+# キーポイント: 第1弾で C は基準データに最も近かったが、まだ厳しめの偏りが残っていた（構文の数えすぎ、一致の過剰検知）。
+#               規則の文章は増やさず、「数えないもの」と「-s が付かなくて正しい例」を含む3つ目の採点例を足して、例で範囲を示す。
+# ======================================================================
+
+FEWSHOT_PLUS_PROMPT = FEWSHOT_PROMPT + """
+＜例3の入力＞
+Q3: Please introduce yourself in detail.
+回答: I'm a student of Waseda University. Nice to meet you. I live in Tokyo, but my parents lives in Osaka. I like seeing movies on weekends.
+
+＜例3の解説＞（数えないもの・誤りにしないものの例）
+- "a student of Waseda University" の前置詞は at の方が自然だが、語の選択の問題なので数えない（4観点の対象外）。固有名詞も数えない。
+- "Nice to meet you." は主語と動詞のない決まり文句なので数えない。
+- "I live" "I like" は主語が I なので -s が付かないのが正しい（主語と動詞の一致の誤りにしない）。
+- "my parents lives" は主語が複数なので live が正しい（主語と動詞の一致の誤り）。
+- "seeing movies"（watching が自然）は語の選択の問題なので数えない。
+
+＜例3の出力＞
+{"items": [
+ {"category": "時制", "q": "Q3", "quote": "I'm a student", "is_error": false, "correction": ""},
+ {"category": "主語と動詞の一致", "q": "Q3", "quote": "I'm a student", "is_error": false, "correction": ""},
+ {"category": "名詞の境界", "q": "Q3", "quote": "a student", "is_error": false, "correction": ""},
+ {"category": "構文・語順", "q": "Q3", "quote": "I'm a student of Waseda University", "is_error": false, "correction": ""},
+ {"category": "時制", "q": "Q3", "quote": "I live in Tokyo", "is_error": false, "correction": ""},
+ {"category": "主語と動詞の一致", "q": "Q3", "quote": "I live", "is_error": false, "correction": ""},
+ {"category": "構文・語順", "q": "Q3", "quote": "I live in Tokyo", "is_error": false, "correction": ""},
+ {"category": "時制", "q": "Q3", "quote": "my parents lives in Osaka", "is_error": false, "correction": ""},
+ {"category": "主語と動詞の一致", "q": "Q3", "quote": "my parents lives", "is_error": true, "correction": "my parents live"},
+ {"category": "名詞の境界", "q": "Q3", "quote": "my parents", "is_error": false, "correction": ""},
+ {"category": "構文・語順", "q": "Q3", "quote": "but my parents lives in Osaka", "is_error": false, "correction": ""},
+ {"category": "時制", "q": "Q3", "quote": "I like seeing movies on weekends", "is_error": false, "correction": ""},
+ {"category": "主語と動詞の一致", "q": "Q3", "quote": "I like", "is_error": false, "correction": ""},
+ {"category": "名詞の境界", "q": "Q3", "quote": "movies", "is_error": false, "correction": ""},
+ {"category": "名詞の境界", "q": "Q3", "quote": "weekends", "is_error": false, "correction": ""},
+ {"category": "構文・語順", "q": "Q3", "quote": "I like seeing movies on weekends", "is_error": false, "correction": ""}
 ]}
 """
 

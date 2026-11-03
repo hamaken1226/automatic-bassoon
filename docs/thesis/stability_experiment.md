@@ -60,6 +60,24 @@
 - 正確さ（基準データとの比較）: `reference_scoring.md` を参照（2026-11-03）。水準は C、相対的な傾向（相関）は B が最も近い。
 - 手動文字起こし版（RQ3）は、研究の主旨から外れるため実施しない（2026-11-03 決定）。
 
+## 2.6 第2弾：D・E（2026-11-03 追加）
+
+第1弾と基準データとの比較（`reference_scoring.md`）を踏まえて、2つのプロンプトを追加した。
+
+| 条件 | プロンプト | 発想 | ねらい |
+|---|---|---|---|
+| `d_clause_fewshot` | D「手順＋採点例」 | B の手順（節に分けて4つの質問）に、C と同じ2つの採点例を節ごとの出力形式で示す | B の「数える単位の安定」と C の「判断の正確さ」を両立する |
+| `e_fewshot_plus` | E「採点例＋対象外の例」 | C に3つ目の採点例を足す（語の選択・定型のあいさつは数えない、I live / they like は誤りにしない、my parents lives は誤り） | C に残る厳しめの偏り（構文の数えすぎ、一致の過剰検知）を例で抑える |
+
+どちらも、第1弾の「規則を文章で足しても効かず、手順と例が効く」という結果に沿って、規則の文章ではなく例を増やしている。
+E の3つ目の例は基準データの採点基準（語の選択は対象外）に合わせているため、基準データとの比較では有利になりうる点に注意する。
+
+```bash
+python experiments/stability.py run --runs 5 --conditions d_clause_fewshot,e_fewshot_plus
+python experiments/stability.py summarize
+python experiments/stability.py compare     # results/gold_rates.json（基準データの集計値）を置いておく
+```
+
 ## 3. 測る指標
 
 同じ書き起こしを各条件で N 回（基本は5回）採点し、テスター×セット×観点ごとに集計する。

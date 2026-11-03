@@ -36,7 +36,13 @@ stability.py — 採点のぶれ（再現性）を検証する再実験スクリ
     seed          baseline + seed を固定
     schema        A/C と同じ出力形式で、定義も例もない最小限のプロンプト
     a_rubric_perq プロンプトA を1問ずつ別々に採点して合算
+  第2弾（--conditions d_clause_fewshot,e_fewshot_plus で実行）
+    d_clause_fewshot  プロンプトD「手順＋採点例」: B の手順に C の採点例を節ごとの形で組み合わせる
+    e_fewshot_plus    プロンプトE「採点例＋対象外の例」: C に、数えないもの・一致の正しい例を示す3つ目の例を足す
   baseline 以外はすべて seed を固定し、フィードバック文は生成させない。
+
+  4. 基準データとの比較（正確さ）: results/gold_rates.json を置いて
+       python experiments/stability.py compare
 
 注意: .streamlit/secrets.toml（OPENAI_API_KEY, gcp_service_account）が必要。
       OPENAI_API_KEY は環境変数でもよい。export は --from-csv を付ければ GCP 認証なしで動く。
@@ -78,8 +84,9 @@ SET_ORDER = ["Set A", "Set B", "Set C", "Set D"]
 PARTICIPANTS = ["P001", "HarunaK", "HaruhiK", "MakoI"]
 # メインの比較（現状 + キーポイントの異なる3つのプロンプト）と、補助の分析用の条件
 MAIN_CONDITIONS = ["baseline", "a_rubric", "b_clause", "c_fewshot"]
+SECOND_CONDITIONS = ["d_clause_fewshot", "e_fewshot_plus"]  # 第2弾（第1弾と基準データの結果を踏まえた改良版）
 EXTRA_CONDITIONS = ["seed", "schema", "a_rubric_perq"]
-ALL_CONDITIONS = MAIN_CONDITIONS + EXTRA_CONDITIONS
+ALL_CONDITIONS = MAIN_CONDITIONS + SECOND_CONDITIONS + EXTRA_CONDITIONS
 SEED = 42
 
 # --- 問題リスト（app.pyと同一）---
@@ -143,8 +150,8 @@ QUESTION_INDEX = {
 
 
 # プロンプトと出力形式は prompts.py にまとめてある
-from prompts import (BASELINE_PROMPT, CATEGORIES, CLAUSE_PROMPT, CLAUSE_SCHEMA, FEWSHOT_PROMPT, ITEM_SCHEMA,
-                     RUBRIC_PROMPT, SCHEMA_PROMPT)
+from prompts import (BASELINE_PROMPT, CATEGORIES, CLAUSE_FEWSHOT_PROMPT, CLAUSE_PROMPT, CLAUSE_SCHEMA, FEWSHOT_PLUS_PROMPT,
+                     FEWSHOT_PROMPT, ITEM_SCHEMA, RUBRIC_PROMPT, SCHEMA_PROMPT)
 
 
 # ======================================================================
@@ -633,7 +640,9 @@ def counts_from_clauses(clauses):
     return counts
 
 
-ITEM_PROMPTS = {"schema": SCHEMA_PROMPT, "a_rubric": RUBRIC_PROMPT, "a_rubric_perq": RUBRIC_PROMPT, "c_fewshot": FEWSHOT_PROMPT}
+ITEM_PROMPTS = {"schema": SCHEMA_PROMPT, "a_rubric": RUBRIC_PROMPT, "a_rubric_perq": RUBRIC_PROMPT, "c_fewshot": FEWSHOT_PROMPT,
+                "e_fewshot_plus": FEWSHOT_PLUS_PROMPT}
+CLAUSE_PROMPTS = {"b_clause": CLAUSE_PROMPT, "d_clause_fewshot": CLAUSE_FEWSHOT_PROMPT}
 
 
 # A・B・C（と schema）は、必須文脈を1つずつ書き出すので出力が長くなる。回答の長い参加者では
@@ -655,8 +664,8 @@ def run_once(client, model, condition, questions):
         content = resp.choices[0].message.content
         return counts_from_baseline(json.loads(content)), [content], resp.system_fingerprint, None
 
-    if condition == "b_clause":
-        system, schema, key, to_counts = CLAUSE_PROMPT, CLAUSE_SCHEMA, "clauses", counts_from_clauses
+    if condition in CLAUSE_PROMPTS:
+        system, schema, key, to_counts = CLAUSE_PROMPTS[condition], CLAUSE_SCHEMA, "clauses", counts_from_clauses
     else:
         system, schema, key, to_counts = ITEM_PROMPTS[condition], ITEM_SCHEMA, "items", counts_from_items
     size = 1 if condition == "a_rubric_perq" else CHUNK_SIZE
@@ -944,6 +953,73 @@ def wilcoxon_signed_rank(diffs):
 
 # ======================================================================
 
+# ======================================================================
+# compare: 基準データとの比較（正確さ）
+# ======================================================================
+
+def cmd_compare(args):
+    """
+    基準データ（研究者が手元で保管している gold_rates.json：{"参加者|セット": {"rates", "counts", "fossil"}}）と、
+    summarize が出力した summary_cells.csv（各条件の5回の平均）を比べる。
+    化石化の判定は、5回中3回以上「あり」をその条件の判定とする（summarize を既定の --margin 15 で実行しておくこと）。
+    """
+    import math
+    gold = json.load(open(args.gold, encoding="utf-8"))
+    with open(args.cells, encoding="utf-8-sig") as f:
+        cells = list(csv.DictReader(f))
+    idx = {(r["condition"], r["user_id"], r["set_name"], r["category"]): r for r in cells if r["text"] == args.text}
+    conds = [c for c in ALL_CONDITIONS if any(k[0] == c for k in idx)]
+
+    def pearson(a, b):
+        ma, mb = statistics.mean(a), statistics.mean(b)
+        num = sum((x - ma) * (y - mb) for x, y in zip(a, b))
+        den = math.sqrt(sum((x - ma) ** 2 for x in a) * sum((y - mb) ** 2 for y in b))
+        return num / den if den else float("nan")
+
+    res = {}
+    for c in conds:
+        g, m, ctx, mis, by_cat, n = [], [], [], 0, {k: [] for k in CATEGORIES}, 0
+        for key, gv in gold.items():
+            uid, set_name = key.split("|")
+            for cat in CATEGORIES:
+                r = idx.get((c, uid, set_name, cat))
+                if r is None:
+                    continue
+                n += 1
+                gr, mr = gv["rates"][cat], float(r["rate_mean"])
+                g.append(gr); m.append(mr); by_cat[cat].append(abs(mr - gr))
+                if gv["counts"][cat][0]:
+                    ctx.append(float(r["contexts_mean"]) / gv["counts"][cat][0])
+                if (int(r["fossil_true"]) >= 3) != (cat in gv["fossil"]):
+                    mis += 1
+        if not n:
+            continue
+        res[c] = {"cells": n, "mae": statistics.mean(abs(a - b) for a, b in zip(g, m)),
+                  "bias": statistics.mean(b - a for a, b in zip(g, m)), "r": pearson(g, m),
+                  "ctx": statistics.mean(ctx) if ctx else float("nan"), "foss": mis,
+                  "cat": {k: (statistics.mean(v) if v else float("nan")) for k, v in by_cat.items()}}
+    if not res:
+        sys.exit("比較できるセルがありません（gold と summary_cells の参加者・セットが一致しているか確認してください）")
+    names = list(res)
+    print(f"基準データとの比較（各条件は {args.text} 版・5回の平均）\n")
+    print(f"{'指標':<26}" + "".join(f"{c:>18}" for c in names))
+    for label, k, fmt in [("セル数", "cells", "{:18d}"), ("平均絶対誤差（pt）", "mae", "{:18.1f}"),
+                          ("平均の差（＋は厳しい、pt）", "bias", "{:+18.1f}"), ("相関係数 r", "r", "{:18.2f}"),
+                          ("必須文脈数の比（÷基準）", "ctx", "{:18.2f}"), ("化石化判定の食い違い", "foss", "{:18d}")]:
+        print(f"{label:<26}" + "".join(fmt.format(res[c][k]) for c in names))
+    for cat in CATEGORIES:
+        print(f"  平均絶対誤差 {cat:<14}" + "".join(f"{res[c]['cat'][cat]:18.1f}" for c in names))
+    out = Path(args.cells).parent / "compare_gold.csv"
+    with open(out, "w", newline="", encoding="utf-8-sig") as f:
+        w = csv.writer(f)
+        w.writerow(["condition", "cells", "mae", "bias", "r", "contexts_ratio", "fossil_mismatch"] + [f"mae_{c}" for c in CATEGORIES])
+        for c in names:
+            v = res[c]
+            w.writerow([c, v["cells"], round(v["mae"], 3), round(v["bias"], 3), round(v["r"], 3), round(v["ctx"], 3), v["foss"]]
+                       + [round(v["cat"][k], 3) for k in CATEGORIES])
+    print(f"\n保存先 → {out}")
+
+
 def main():
     p = argparse.ArgumentParser(description="採点のぶれ（再現性）の再実験")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -990,6 +1066,12 @@ def main():
     s.add_argument("--model", help="特定のモデルの結果だけ集計する")
     s.add_argument("--margin", type=float, default=15.0, help="化石化判定: 全体平均 + 何ポイントか（後から変えて集計し直せる）")
     s.set_defaults(func=cmd_summarize)
+
+    g = sub.add_parser("compare", help="基準データ（gold_rates.json）と各条件の採点を比べる（正確さ）")
+    g.add_argument("--gold", default=str(EXP_DIR / "results" / "gold_rates.json"))
+    g.add_argument("--cells", default=str(EXP_DIR / "results" / "summary_cells.csv"))
+    g.add_argument("--text", default="whisper")
+    g.set_defaults(func=cmd_compare)
 
     args = p.parse_args()
     args.func(args)
