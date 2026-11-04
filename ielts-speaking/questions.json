@@ -1,0 +1,108 @@
+{
+  "part1": [
+    {"id": "p1-01", "topic": "Work or study", "question": "Do you work or are you a student?"},
+    {"id": "p1-02", "topic": "Work or study", "question": "What do you like most about your job or your studies?"},
+    {"id": "p1-03", "topic": "Hometown", "question": "Where is your hometown, and what is it like?"},
+    {"id": "p1-04", "topic": "Hometown", "question": "Has your hometown changed much since you were a child?"},
+    {"id": "p1-05", "topic": "Home", "question": "Do you live in a house or an apartment?"},
+    {"id": "p1-06", "topic": "Home", "question": "Which room in your home do you spend the most time in? Why?"},
+    {"id": "p1-07", "topic": "Free time", "question": "What do you usually do in your free time?"},
+    {"id": "p1-08", "topic": "Weekends", "question": "How did you spend last weekend?"},
+    {"id": "p1-09", "topic": "Food", "question": "What kind of food do you like to eat?"},
+    {"id": "p1-10", "topic": "Food", "question": "Do you prefer eating at home or eating out? Why?"},
+    {"id": "p1-11", "topic": "Coffee and tea", "question": "Do you drink more coffee or tea?"},
+    {"id": "p1-12", "topic": "Shopping", "question": "Do you enjoy shopping? Why or why not?"},
+    {"id": "p1-13", "topic": "Weather", "question": "What kind of weather do you like best?"},
+    {"id": "p1-14", "topic": "Transport", "question": "How do you usually get to work or school?"},
+    {"id": "p1-15", "topic": "Mobile phones", "question": "How often do you use your mobile phone, and what for?"},
+    {"id": "p1-16", "topic": "Reading", "question": "Do you like reading? What kind of things do you read?"},
+    {"id": "p1-17", "topic": "Music", "question": "What kind of music do you listen to?"},
+    {"id": "p1-18", "topic": "Friends", "question": "Do you prefer spending time with one friend or with a group of friends?"},
+    {"id": "p1-19", "topic": "Sport and exercise", "question": "Do you do any kind of exercise regularly?"},
+    {"id": "p1-20", "topic": "Mornings", "question": "Are you a morning person? Why or why not?"}
+  ],
+  "part2": [
+    {
+      "id": "p2-01", "topic": "A useful skill",
+      "question": "Describe a skill you learned that you think is very useful.",
+      "points": ["what the skill is", "when and how you learned it", "how often you use it", "and explain why you think it is useful"]
+    },
+    {
+      "id": "p2-02", "topic": "A place you visited",
+      "question": "Describe a place you visited that you would like to go back to.",
+      "points": ["where it is", "when you went there and who you went with", "what you did there", "and explain why you would like to go back"]
+    },
+    {
+      "id": "p2-03", "topic": "A helpful person",
+      "question": "Describe a person who has helped you in your work or studies.",
+      "points": ["who this person is", "how you know this person", "how they helped you", "and explain how you felt about their help"]
+    },
+    {
+      "id": "p2-04", "topic": "A difficult decision",
+      "question": "Describe a difficult decision you made.",
+      "points": ["what the decision was", "when you made it", "why it was difficult", "and explain how you feel about the decision now"]
+    },
+    {
+      "id": "p2-05", "topic": "A café or restaurant",
+      "question": "Describe a café or restaurant you enjoy going to.",
+      "points": ["where it is", "how often you go there", "what you usually order", "and explain why you enjoy going there"]
+    },
+    {
+      "id": "p2-06", "topic": "A piece of technology",
+      "question": "Describe a piece of technology you find difficult to live without.",
+      "points": ["what it is", "when you started using it", "what you use it for", "and explain why it is so important to you"]
+    },
+    {
+      "id": "p2-07", "topic": "A goal",
+      "question": "Describe a goal you would like to achieve in the next few years.",
+      "points": ["what the goal is", "why you set this goal", "what you are doing to achieve it", "and explain how you will feel when you achieve it"]
+    },
+    {
+      "id": "p2-08", "topic": "A memorable event",
+      "question": "Describe a celebration or event that you remember well.",
+      "points": ["what the event was", "when and where it took place", "who was there", "and explain why you remember it well"]
+    },
+    {
+      "id": "p2-09", "topic": "A book or film",
+      "question": "Describe a book or film that made a strong impression on you.",
+      "points": ["what it was", "when you read or watched it", "what it was about", "and explain why it made a strong impression on you"]
+    },
+    {
+      "id": "p2-10", "topic": "Living abroad",
+      "question": "Describe a country you would like to live or work in for a while.",
+      "points": ["which country it is", "how you know about it", "what you would do there", "and explain why you would like to live or work there"]
+    }
+  ],
+  "part3": [
+    {"id": "p3-01-1", "card": "p2-01", "question": "What skills do young people need to find a good job today?"},
+    {"id": "p3-01-2", "card": "p2-01", "question": "Is it better to learn skills at school or through work experience?"},
+    {"id": "p3-01-3", "card": "p2-01", "question": "Do you think people should keep learning new skills throughout their lives? Why?"},
+    {"id": "p3-02-1", "card": "p2-02", "question": "Why do some people prefer to visit the same place again and again?"},
+    {"id": "p3-02-2", "card": "p2-02", "question": "How has tourism changed the places people visit?"},
+    {"id": "p3-02-3", "card": "p2-02", "question": "Do you think people travel more now than in the past? Why?"},
+    {"id": "p3-03-1", "card": "p2-03", "question": "Who should help new employees settle into a company?"},
+    {"id": "p3-03-2", "card": "p2-03", "question": "Is it easier to learn from a teacher or from a colleague?"},
+    {"id": "p3-03-3", "card": "p2-03", "question": "Why are some people reluctant to ask for help?"},
+    {"id": "p3-04-1", "card": "p2-04", "question": "Do young people today have to make more difficult decisions than their parents did?"},
+    {"id": "p3-04-2", "card": "p2-04", "question": "Should people ask for advice before making important decisions?"},
+    {"id": "p3-04-3", "card": "p2-04", "question": "Why do some people find it hard to make decisions quickly?"},
+    {"id": "p3-05-1", "card": "p2-05", "question": "Why has café culture become so popular in many cities?"},
+    {"id": "p3-05-2", "card": "p2-05", "question": "What makes a small, independent shop successful compared to a large chain?"},
+    {"id": "p3-05-3", "card": "p2-05", "question": "How has the way people eat out changed in recent years?"},
+    {"id": "p3-06-1", "card": "p2-06", "question": "Has technology made people's lives easier or more stressful?"},
+    {"id": "p3-06-2", "card": "p2-06", "question": "Should children be allowed to use smartphones? At what age?"},
+    {"id": "p3-06-3", "card": "p2-06", "question": "How might technology change the way people work in the future?"},
+    {"id": "p3-07-1", "card": "p2-07", "question": "Is it important for people to set long-term goals?"},
+    {"id": "p3-07-2", "card": "p2-07", "question": "Why do some people give up on their goals?"},
+    {"id": "p3-07-3", "card": "p2-07", "question": "Do you think success is mainly about hard work or about luck?"},
+    {"id": "p3-08-1", "card": "p2-08", "question": "Why do people celebrate special events?"},
+    {"id": "p3-08-2", "card": "p2-08", "question": "Are traditional celebrations becoming less important nowadays?"},
+    {"id": "p3-08-3", "card": "p2-08", "question": "Do you think it is better to celebrate with family or with friends?"},
+    {"id": "p3-09-1", "card": "p2-09", "question": "Do people read fewer books today than in the past? Why?"},
+    {"id": "p3-09-2", "card": "p2-09", "question": "What can people learn from films that they cannot learn from books?"},
+    {"id": "p3-09-3", "card": "p2-09", "question": "Should the government support the film industry?"},
+    {"id": "p3-10-1", "card": "p2-10", "question": "What are the main reasons people move to another country?"},
+    {"id": "p3-10-2", "card": "p2-10", "question": "What difficulties might people face when they move abroad?"},
+    {"id": "p3-10-3", "card": "p2-10", "question": "Do you think working abroad is a good experience for young people?"}
+  ]
+}

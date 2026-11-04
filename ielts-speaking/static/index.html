@@ -1,0 +1,647 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IELTS Speaking Practice</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --surface: #ffffff; --ink: #1d2330; --ink-2: #4a5263; --muted: #7b8394;
+    --line: #e2e5eb; --accent: #2f5bd3; --accent-soft: #e8eefc;
+    --good: #1f7a4d; --good-soft: #e3f4ea; --bad: #b3261e; --bad-soft: #fbe7e5; --warn: #9a6200; --warn-soft: #fff3d6;
+    --filler: #ffd96a; --check: #fff0bf; --repeat: #cfe0ff;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.65 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", Meiryo, sans-serif; }
+  header { background: var(--surface); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+  .bar { max-width: 960px; margin: 0 auto; padding: 10px 20px; display: flex; align-items: center; gap: 16px; }
+  .bar h1 { font-size: 17px; margin: 0; margin-right: auto; }
+  .bar h1 small { color: var(--muted); font-weight: normal; margin-left: 8px; }
+  nav button { background: none; border: 0; padding: 6px 12px; border-radius: 8px; font: inherit; color: var(--ink-2); cursor: pointer; }
+  nav button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  main { max-width: 960px; margin: 0 auto; padding: 20px; }
+  section.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; margin-bottom: 16px; }
+  h2 { font-size: 16px; margin: 0 0 12px; }
+  h2 .num { display: inline-block; width: 22px; height: 22px; line-height: 22px; text-align: center; border-radius: 50%;
+    background: var(--accent-soft); color: var(--accent); font-size: 12px; margin-right: 8px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .hidden { display: none !important; }
+  button.btn { font: inherit; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 8px 16px;
+    border-radius: 8px; cursor: pointer; }
+  button.btn:hover { border-color: #c4c9d3; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover { background: #244bb6; }
+  button.danger { color: var(--bad); }
+  button:disabled { opacity: .5; cursor: default; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+  /* 練習画面 */
+  .focus-banner { background: var(--warn-soft); border: 1px solid #f0d58f; border-radius: var(--radius); padding: 12px 16px; margin-bottom: 16px; }
+  .focus-banner b { color: var(--warn); }
+  .parts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .parts button { text-align: left; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface);
+    font: inherit; cursor: pointer; }
+  .parts button b { display: block; font-size: 16px; }
+  .parts button span { color: var(--muted); font-size: 13px; }
+  .parts button.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+  .topic { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
+  .question { font-size: 21px; font-weight: 600; margin: 4px 0 8px; line-height: 1.45; }
+  .points { margin: 0 0 6px; padding-left: 0; list-style: none; }
+  .points li { font-size: 16px; padding-left: 18px; position: relative; }
+  .points li::before { content: "•"; position: absolute; left: 4px; color: var(--muted); }
+  .bigtime { font-size: 48px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+  .bigtime small { font-size: 18px; color: var(--muted); font-weight: 500; }
+  textarea { width: 100%; min-height: 110px; font: inherit; padding: 10px; border: 1px solid var(--line); border-radius: 8px; resize: vertical; }
+  .progress { height: 10px; background: #edf0f4; border-radius: 5px; position: relative; overflow: hidden; margin: 8px 0 6px; }
+  .progress .fill { height: 100%; background: var(--accent); width: 0; transition: width .1s linear; }
+  .progress .tick { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ink-2); opacity: .5; }
+  .rec-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #d93025; margin-right: 8px; animation: blink 1s infinite; }
+  @keyframes blink { 50% { opacity: .25; } }
+  .hint { font-weight: 600; min-height: 1.6em; }
+  .hint.warn { color: var(--warn); }
+  .spinner { width: 28px; height: 28px; border: 3px solid var(--accent-soft); border-top-color: var(--accent); border-radius: 50%;
+    animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; margin-right: 12px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error { background: var(--bad-soft); color: var(--bad); border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; }
+
+  /* 結果画面 */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .stat { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+  .stat .label { font-size: 12px; color: var(--muted); }
+  .stat .value { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.3; }
+  .stat .value small { font-size: 13px; font-weight: 500; color: var(--ink-2); }
+  .delta { font-size: 12px; font-weight: 600; }
+  .delta.better { color: var(--good); } .delta.worse { color: var(--bad); } .delta.same { color: var(--muted); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .chip { font-size: 13px; padding: 2px 10px; border-radius: 12px; background: #eef0f4; }
+  .chip.filler { background: var(--filler); } .chip.check { background: var(--check); }
+  .badge { display: inline-block; font-size: 13px; font-weight: 600; padding: 2px 10px; border-radius: 12px; }
+  .badge.ok { background: var(--good-soft); color: var(--good); } .badge.ng { background: var(--bad-soft); color: var(--bad); }
+  .transcript { font-size: 16.5px; line-height: 2.05; }
+  .transcript .filler { background: var(--filler); border-radius: 3px; padding: 0 2px; }
+  .transcript .check { background: var(--check); border-bottom: 2px dashed #d9a400; border-radius: 3px; padding: 0 2px; }
+  .transcript .repeat { background: var(--repeat); border-radius: 3px; padding: 0 2px; }
+  .transcript .pause { font-size: 11px; color: var(--bad); background: var(--bad-soft); border-radius: 8px; padding: 1px 6px; margin: 0 3px;
+    vertical-align: 2px; font-weight: 600; white-space: nowrap; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--ink-2); margin-bottom: 8px; }
+  .legend i { display: inline-block; width: 14px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 4px; }
+  .rep { padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .rep:last-child { border-bottom: 0; }
+  .rep b { font-size: 16px; } .rep .count { color: var(--bad); font-weight: 600; margin: 0 6px; }
+  .rep .alts { color: var(--good); }
+  ul.check { list-style: none; padding: 0; margin: 6px 0; }
+  ul.check li { padding: 2px 0 2px 24px; position: relative; }
+  ul.check li::before { position: absolute; left: 2px; font-weight: 700; }
+  ul.check.ok li::before { content: "✓"; color: var(--good); } ul.check.ng li::before { content: "✗"; color: var(--bad); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .orig { color: var(--bad); text-decoration: line-through; text-decoration-color: rgba(179,38,30,.5); }
+  .corr { color: var(--good); font-weight: 600; }
+  .cat { font-size: 12px; background: #eef0f4; border-radius: 10px; padding: 1px 8px; white-space: nowrap; }
+  .bands { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .band { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+  .band .value { font-size: 28px; font-weight: 700; }
+  .band.na .value { font-size: 15px; color: var(--muted); font-weight: 500; padding-top: 10px; }
+  .model { font-size: 16px; line-height: 1.8; background: #fafbfc; border-left: 3px solid var(--accent); padding: 10px 14px; white-space: pre-wrap; }
+  .next { background: var(--warn-soft); border-color: #f0d58f; }
+  .next p { font-size: 17px; font-weight: 600; margin: 0; }
+  .cost { text-align: right; }
+
+  /* 履歴画面 */
+  #histTable tbody tr { cursor: pointer; }
+  #histTable tbody tr:hover { background: #f3f5f9; }
+  .chart-wrap { position: relative; }
+  .chart-wrap svg { width: 100%; height: 240px; display: block; }
+  .chart-wrap .axis text { fill: var(--muted); font-size: 11px; }
+  .chart-wrap .grid line { stroke: #edf0f4; }
+  .tooltip { position: absolute; pointer-events: none; background: var(--ink); color: #fff; font-size: 12px; padding: 6px 9px; border-radius: 6px;
+    white-space: nowrap; transform: translate(-50%, -110%); }
+  select { font: inherit; padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <h1>IELTS Speaking Practice <small>本番 12/11 まで <span id="daysLeft"></span></small></h1>
+    <nav>
+      <button id="navPractice" class="on" onclick="showView('practice')">練習</button>
+      <button id="navHistory" onclick="showView('history')">履歴</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- ================= 練習画面 ================= -->
+  <div id="viewPractice">
+    <div id="focusBanner" class="focus-banner hidden"><b>前回の「次回意識する1点」</b><div id="focusText"></div></div>
+    <div id="practiceError" class="error hidden"></div>
+
+    <section class="card" id="partCard">
+      <h2>Partを選ぶ</h2>
+      <div class="parts">
+        <button data-part="1" onclick="selectPart(1)"><b>Part 1</b><span>身近な質問・目安30秒(上限60秒)</span></button>
+        <button data-part="2" onclick="selectPart(2)"><b>Part 2</b><span>準備1分 → 2分スピーチ</span></button>
+        <button data-part="3" onclick="selectPart(3)"><b>Part 3</b><span>ディスカッション・目安45秒〜1分(上限90秒)</span></button>
+      </div>
+    </section>
+
+    <section class="card hidden" id="questionCard">
+      <div class="topic" id="qTopic"></div>
+      <div class="question" id="qText"></div>
+      <div id="qPointsWrap" class="hidden"><div class="muted">You should say:</div><ul class="points" id="qPoints"></ul></div>
+      <div class="row" id="qButtons" style="margin-top:14px">
+        <button class="btn primary" id="startBtn" onclick="startFlow()">録音開始</button>
+        <button class="btn" id="rerollBtn" onclick="loadQuestion()">別の質問</button>
+      </div>
+    </section>
+
+    <section class="card hidden" id="prepCard">
+      <h2>準備時間</h2>
+      <div class="row" style="justify-content:space-between">
+        <div class="bigtime" id="prepTime">1:00</div>
+        <button class="btn" onclick="finishPrep()">準備を終えて話す</button>
+      </div>
+      <div class="muted" style="margin-bottom:6px">0秒になると自動で録音が始まります。メモは録音中も見られます。</div>
+    </section>
+
+    <section class="card hidden" id="memoCard">
+      <h2>メモ</h2>
+      <textarea id="memo" placeholder="キーワードだけ書く(例: when / where / why / 結論の一言)"></textarea>
+    </section>
+
+    <section class="card hidden" id="recCard">
+      <div class="row" style="justify-content:space-between">
+        <div class="bigtime"><span class="rec-dot"></span><span id="recTime">0:00</span> <small id="recLimit"></small></div>
+        <div class="row">
+          <button class="btn primary" onclick="stopRecording()">停止して採点</button>
+          <button class="btn danger" onclick="cancelRecording()">やり直す</button>
+        </div>
+      </div>
+      <div class="progress"><div class="fill" id="recFill"></div><div id="recTicks"></div></div>
+      <div class="hint" id="recHint"></div>
+    </section>
+
+    <section class="card hidden" id="busyCard">
+      <span class="spinner"></span><b>文字起こしと採点をしています…</b>
+      <div class="muted" style="margin-top:6px">通常 10〜30秒ほどかかります。</div>
+    </section>
+  </div>
+
+  <!-- ================= 結果画面 ================= -->
+  <div id="viewResult" class="hidden"></div>
+
+  <!-- ================= 履歴画面 ================= -->
+  <div id="viewHistory" class="hidden">
+    <section class="card">
+      <div class="row" style="justify-content:space-between; margin-bottom:8px">
+        <h2 style="margin:0">指標の推移</h2>
+        <div class="row">
+          <select id="chartMetric" onchange="drawChart()"></select>
+          <select id="chartPart" onchange="drawChart()">
+            <option value="">全Part</option><option value="1">Part 1</option><option value="2">Part 2</option><option value="3">Part 3</option>
+          </select>
+        </div>
+      </div>
+      <div class="chart-wrap" id="chartWrap"></div>
+      <div class="muted" id="chartNote"></div>
+    </section>
+    <section class="card">
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">これまでの練習</h2>
+        <div class="muted" id="histSummary"></div>
+      </div>
+      <div style="overflow-x:auto; margin-top:8px">
+        <table id="histTable">
+          <thead><tr>
+            <th>日時</th><th>Part</th><th>質問</th><th class="num">時間</th><th class="num">WPM</th>
+            <th class="num">フィラー</th><th class="num">要確認</th><th class="num">沈黙</th><th class="num">最長</th>
+            <th class="num">多様さ</th><th class="num">目安バンド<br>FC / LR / GRA</th><th class="num">費用</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="muted" id="histEmpty"></div>
+    </section>
+  </div>
+</main>
+
+<script>
+// ---------------------------------------------------------------- 設定
+const PART_CFG = {
+  1: { limit: 60,  ticks: [30],      label: '目安30秒 / 上限60秒',
+       hint: t => t >= 45 ? ['そろそろ締めの一言を。', 'warn'] : t >= 30 ? ['目安の30秒。理由か例をひとつ足して締める。', ''] : null },
+  2: { limit: 120, ticks: [105],     label: 'で自動停止', prep: 60,
+       hint: t => t >= 105 ? ['あと少し — 結論の一文で締めましょう', 'warn'] : t >= 90 ? ['残り30秒。最後の項目(explain why)に入る。', ''] : null },
+  3: { limit: 90,  ticks: [45, 60],  label: '目安45秒〜1分 / 上限90秒',
+       hint: t => t >= 60 ? ['まとめ(So, overall…)で締めましょう', 'warn'] : t >= 45 ? ['目安の範囲。例を出したらまとめへ。', ''] : null },
+};
+const CATEGORY_JA = { collocation: 'コロケーション', article: '冠詞', preposition: '前置詞', tense: '時制', word_usage: '語法',
+  agreement: '一致(三単現など)', word_order: '語順', plural: '単数・複数', other: 'その他' };
+
+// ---------------------------------------------------------------- 共通
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const mmss = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+const show = (el, on = true) => (typeof el === 'string' ? $(el) : el).classList.toggle('hidden', !on);
+const fmtDate = iso => { const d = new Date(iso); return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; };
+
+async function api(url, opts) {
+  const res = await fetch(url, opts);
+  let body = null;
+  try { body = await res.json(); } catch (e) { /* noop */ }
+  if (!res.ok) throw new Error((body && body.detail) || `サーバーエラー (${res.status})`);
+  return body;
+}
+
+function showView(name) {
+  show('viewPractice', name === 'practice');
+  show('viewResult', name === 'result');
+  show('viewHistory', name === 'history');
+  $('navPractice').classList.toggle('on', name !== 'history');
+  $('navHistory').classList.toggle('on', name === 'history');
+  if (name === 'history') loadHistory();
+  if (name === 'practice') loadFocus();
+  window.scrollTo(0, 0);
+}
+
+(function daysLeft() {
+  const exam = new Date(2026, 11, 11), today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const d = Math.round((exam - today) / 86400000);
+  $('daysLeft').textContent = d >= 0 ? `あと${d}日` : '';
+})();
+
+// ---------------------------------------------------------------- 練習画面
+let part = null, question = null, phase = 'idle';
+let stream = null, recorder = null, chunks = [], discard = false;
+let prepTimer = null, recTimer = null, autoStop = null, recStart = 0;
+
+async function loadFocus() {
+  try {
+    const rows = await api('/api/history');
+    const last = rows.find(r => r.next_focus);
+    if (last) { $('focusText').textContent = last.next_focus; show('focusBanner'); }
+  } catch (e) { /* 履歴がなくても練習はできる */ }
+}
+
+function selectPart(p) {
+  if (phase !== 'idle') return;
+  part = p;
+  document.querySelectorAll('.parts button').forEach(b => b.classList.toggle('on', +b.dataset.part === p));
+  loadQuestion();
+}
+
+async function loadQuestion() {
+  if (phase !== 'idle') return;
+  show('practiceError', false);
+  try {
+    const q = await api(`/api/question?part=${part}` + (question && question.part === part ? `&exclude=${question.id}` : ''));
+    question = q;
+    $('qTopic').textContent = q.topic || '';
+    $('qText').textContent = q.question;
+    $('qPoints').innerHTML = (q.points || []).map(p => `<li>${esc(p)}</li>`).join('');
+    show('qPointsWrap', part === 2);
+    $('startBtn').textContent = part === 2 ? '準備開始(1分)' : '録音開始';
+    $('memo').value = '';
+    show('questionCard');
+  } catch (e) { practiceError(e.message); }
+}
+
+function practiceError(msg) {
+  $('practiceError').textContent = msg;
+  show('practiceError');
+}
+
+function setPhase(p) {
+  phase = p;
+  show('partCard', p === 'idle');
+  show('qButtons', p === 'idle');
+  show('prepCard', p === 'prep');
+  show('memoCard', part === 2 && (p === 'prep' || p === 'rec'));
+  show('recCard', p === 'rec');
+  show('busyCard', p === 'busy');
+  show('questionCard', !!question && p !== 'busy');
+}
+
+async function getStream() {
+  if (!stream || stream.getTracks().some(t => t.readyState === 'ended')) {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+  }
+  return stream;
+}
+
+function releaseStream() {
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  stream = null;
+}
+
+async function startFlow() {
+  show('practiceError', false);
+  try {
+    await getStream();   // 先にマイクの許可を取っておく(Part2の自動開始で待たないように)
+  } catch (e) {
+    return practiceError('マイクが使えません。ブラウザのマイク許可を確認してください。(' + e.message + ')');
+  }
+  if (part === 2) startPrep(); else startRecording();
+}
+
+function startPrep() {
+  setPhase('prep');
+  const end = performance.now() + PART_CFG[2].prep * 1000;
+  const tick = () => {
+    const left = Math.max(0, (end - performance.now()) / 1000);
+    $('prepTime').textContent = mmss(Math.ceil(left));
+    if (left <= 0) finishPrep();
+  };
+  tick();
+  prepTimer = setInterval(tick, 200);
+  $('memo').focus();
+}
+
+function finishPrep() {
+  if (phase !== 'prep') return;
+  clearInterval(prepTimer);
+  startRecording();
+}
+
+async function startRecording() {
+  const cfg = PART_CFG[part];
+  let s;
+  try { s = await getStream(); } catch (e) { setPhase('idle'); return practiceError('マイクが使えません: ' + e.message); }
+  chunks = []; discard = false;
+  const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
+  recorder = new MediaRecorder(s, { mimeType: mime });
+  recorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+  recorder.onstop = onRecorderStop;
+  recorder.onstart = () => {
+    recStart = performance.now();
+    autoStop = setTimeout(stopRecording, cfg.limit * 1000);
+    recTimer = setInterval(updateRecUI, 100);
+  };
+  $('recLimit').textContent = `/ ${mmss(cfg.limit)}  ${cfg.label}`;
+  $('recTicks').innerHTML = cfg.ticks.map(t => `<div class="tick" style="left:${t / cfg.limit * 100}%"></div>`).join('');
+  $('recFill').style.width = '0';
+  $('recTime').textContent = '0:00';
+  $('recHint').textContent = '';
+  setPhase('rec');
+  recorder.start(1000);
+}
+
+function updateRecUI() {
+  const cfg = PART_CFG[part];
+  const t = (performance.now() - recStart) / 1000;
+  $('recTime').textContent = mmss(Math.min(t, cfg.limit));
+  $('recFill').style.width = Math.min(100, t / cfg.limit * 100) + '%';
+  const h = cfg.hint(t);
+  $('recHint').textContent = h ? h[0] : '';
+  $('recHint').className = 'hint ' + (h ? h[1] : '');
+}
+
+function stopRecording() {
+  clearTimeout(autoStop); clearInterval(recTimer);
+  if (recorder && recorder.state !== 'inactive') recorder.stop();
+}
+
+function cancelRecording() {
+  discard = true;
+  stopRecording();
+}
+
+async function onRecorderStop() {
+  releaseStream();
+  if (discard) { setPhase('idle'); return; }
+  const blob = new Blob(chunks, { type: 'audio/webm' });
+  setPhase('busy');
+  const fd = new FormData();
+  fd.append('audio', blob, 'answer.webm');
+  fd.append('part', part);
+  fd.append('question_id', question.id);
+  try {
+    const result = await api('/api/evaluate', { method: 'POST', body: fd });
+    setPhase('idle');
+    renderResult(result);
+  } catch (e) {
+    setPhase('idle');
+    practiceError('採点できませんでした: ' + e.message);
+  }
+}
+
+// ---------------------------------------------------------------- 結果画面
+function delta(cur, prev, betterWhen, fmt = v => v) {
+  if (prev == null || cur == null) return '';
+  const d = Math.round((cur - prev) * 100) / 100;
+  if (d === 0) return `<span class="delta same">→ 前回と同じ</span>`;
+  const cls = !betterWhen ? 'same' : (d > 0) === (betterWhen === 'up') ? 'better' : 'worse';
+  return `<span class="delta ${cls}">${d > 0 ? '▲' : '▼'} ${fmt(Math.abs(d))}(前回 ${fmt(prev)})</span>`;
+}
+
+function stat(label, value, unit, cur, prev, better, fmt) {
+  return `<div class="stat"><div class="label">${label}</div>
+    <div class="value">${value}${unit ? ` <small>${unit}</small>` : ''}</div>${delta(cur, prev, better, fmt)}</div>`;
+}
+
+function renderResult(r) {
+  const m = r.metrics, pm = r.previous ? r.previous.metrics : null, fb = r.feedback || {};
+  const P = (path, o) => path.split('.').reduce((a, k) => (a == null ? a : a[k]), o);
+  const pv = path => (pm ? P(path, pm) : null);
+  const h = [];
+
+  h.push(`<section class="card">
+    <div class="row" style="justify-content:space-between">
+      <div><div class="topic">Part ${r.part} · ${esc(r.question.topic || '')} · ${fmtDate(r.created_at)}</div>
+      <div class="question" style="font-size:18px">${esc(r.question.question)}</div></div>
+      <div class="row">
+        <button class="btn primary" onclick="nextQuestion(${r.part})">Part ${r.part}をもう一問</button>
+        <button class="btn" onclick="showView('history')">履歴</button>
+      </div>
+    </div>
+    <audio controls preload="none" src="/api/audio/${esc(r.id)}" style="width:100%; margin-top:10px"></audio>
+  </section>`);
+
+  if (r.feedback_error) h.push(`<div class="error">${esc(r.feedback_error)}</div>`);
+
+  // 1. 今回の数字
+  if (m) {
+    const f = m.fillers, p = m.pauses;
+    const chips = Object.entries(f.by_type).map(([k, v]) => `<span class="chip filler">${esc(k)} ×${v}</span>`).join('')
+      + Object.entries(f.check_by_type).map(([k, v]) => `<span class="chip check">${esc(k)} ×${v}(要確認)</span>`).join('');
+    const p2 = r.part === 2
+      ? `<span class="badge ${m.part2_complete ? 'ok' : 'ng'}">${m.part2_complete ? '✓ 1分45秒以上話せた' : '✗ 1分45秒に届かず'}</span>` : '';
+    h.push(`<section class="card"><h2><span class="num">1</span>今回の数字 ${p2}</h2>
+      <div class="stats">
+        ${stat('話した時間', mmss(m.duration_sec), '', m.duration_sec, pv('duration_sec'), r.part === 2 ? 'up' : null, mmss)}
+        ${stat('語数', m.word_count, '語', m.word_count, pv('word_count'), null)}
+        ${stat('話す速さ', Math.round(m.wpm), 'WPM', m.wpm, pv('wpm'), 'up', v => Math.round(v))}
+        ${stat('語彙の多様さ', m.lexical_diversity.toFixed(2), `異なり${m.unique_words}語`, m.lexical_diversity, pv('lexical_diversity'), 'up', v => v.toFixed(2))}
+        ${stat('フィラー', f.total, '回', f.total, pv('fillers.total'), 'down')}
+        ${stat('要確認(maybe/much/like)', f.check_total, '回', f.check_total, pv('fillers.check_total'), 'down')}
+        ${stat(`${p.threshold_sec}秒以上の沈黙`, p.count, '回', p.count, pv('pauses.count'), 'down')}
+        ${stat('最長の沈黙', p.longest_sec.toFixed(1), '秒', p.longest_sec, pv('pauses.longest_sec'), 'down', v => v.toFixed(1))}
+      </div>
+      ${chips ? `<div class="chips">${chips}</div>` : ''}
+      <div class="muted" style="margin-top:8px">${r.previous ? `比較: 前回のPart ${r.part}(${fmtDate(r.previous.created_at)})` : `Part ${r.part}の初回なので比較はありません`}
+      ・ 語彙の多様さは長く話すほど下がりやすいので、同じPart同士で比べてください。</div>
+    </section>`);
+
+    // 2. 文字起こし
+    const tv = (r.transcript_view || []).map(s => {
+      const pause = s.pause ? `<span class="pause" title="${s.pause}秒の沈黙">⏸ ${s.pause}s</span>` : '';
+      return pause + (s.kind ? `<span class="${s.kind}">${esc(s.text)}</span>` : esc(s.text));
+    }).join('');
+    h.push(`<section class="card"><h2><span class="num">2</span>文字起こし</h2>
+      <div class="legend"><span><i style="background:var(--filler)"></i>フィラー</span>
+        <span><i style="background:var(--check)"></i>要確認(普通の用法かも)</span>
+        <span><i style="background:var(--repeat)"></i>3回以上の繰り返し語</span>
+        <span><i style="background:var(--bad-soft)"></i>⏸ ${m.pauses.threshold_sec}秒以上の沈黙</span></div>
+      <div class="transcript">${tv}</div>
+    </section>`);
+
+    // 3. 繰り返し語と言い換え候補
+    const paras = {};
+    (fb.paraphrases || []).forEach(x => { paras[x.word.toLowerCase()] = x.alternatives; });
+    const reps = m.repeated.map(x => {
+      const alts = paras[x.word] || x.forms.map(f => paras[f]).find(Boolean) || [];
+      return `<div class="rep"><b>${esc(x.word)}</b><span class="count">×${x.count}</span>→
+        <span class="alts">${alts.length ? alts.map(esc).join(' / ') : '<span class="muted">(言い換え候補なし)</span>'}</span></div>`;
+    }).join('');
+    h.push(`<section class="card"><h2><span class="num">3</span>繰り返し語と言い換え候補</h2>
+      ${reps || '<div class="muted">3回以上使った内容語はありませんでした。</div>'}</section>`);
+  }
+
+  if (r.feedback) {
+    // 4. 構成チェック
+    const st = fb.structure;
+    h.push(`<section class="card"><h2><span class="num">4</span>構成チェック
+        <span class="badge ${st.has_conclusion ? 'ok' : 'ng'}">${st.has_conclusion ? '✓ 結論で締めた' : '✗ 結論がない・尻すぼみ'}</span></h2>
+      ${st.covered_points.length ? `<ul class="check ok">${st.covered_points.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+      ${st.missing_points.length ? `<ul class="check ng">${st.missing_points.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+      <p style="margin:8px 0 0">${esc(st.comment)}</p></section>`);
+
+    // 5. 間違いの指摘
+    const errs = fb.errors.map(e => `<tr><td><span class="orig">${esc(e.original)}</span></td><td><span class="corr">${esc(e.correction)}</span></td>
+      <td>${esc(e.reason)}</td><td><span class="cat">${esc(CATEGORY_JA[e.category] || e.category)}</span></td></tr>`).join('');
+    h.push(`<section class="card"><h2><span class="num">5</span>間違いの指摘</h2>
+      ${errs ? `<table><thead><tr><th>原文</th><th>修正</th><th>理由</th><th>種類</th></tr></thead><tbody>${errs}</tbody></table>`
+             : '<div class="muted">はっきりした間違いは見つかりませんでした。</div>'}</section>`);
+
+    // 6. 目安バンド
+    const b = fb.band_estimate;
+    const band = (label, v) => `<div class="band"><div class="label muted">${label}</div><div class="value">${Number(v).toFixed(1)}</div></div>`;
+    h.push(`<section class="card"><h2><span class="num">6</span>4項目の目安バンド <span class="muted">(あくまで目安。追うべき数字は1の指標)</span></h2>
+      <div class="bands">${band('Fluency & Coherence', b.fluency_coherence)}${band('Lexical Resource', b.lexical_resource)}
+        ${band('Grammatical Range & Accuracy', b.grammar)}
+        <div class="band na"><div class="label muted">Pronunciation</div><div class="value">評価対象外<br><span style="font-size:12px">italkiで確認</span></div></div></div>
+      <p style="margin:10px 0 0">${esc(b.comment)}</p></section>`);
+
+    // 7. 模範解答
+    h.push(`<section class="card"><h2><span class="num">7</span>Band 7〜7.5 の模範解答 <span class="muted">(自分の話した内容をベースに)</span></h2>
+      <div class="model">${esc(fb.model_answer)}</div></section>`);
+
+    // 8. 次回意識する1点
+    h.push(`<section class="card next"><h2><span class="num">8</span>次回意識する1点</h2><p>${esc(fb.next_focus)}</p></section>`);
+  }
+
+  if (r.cost) {
+    const u = r.usage || {};
+    h.push(`<div class="muted cost">今回の費用(目安): ¥${r.cost.jpy.toFixed(2)}($${r.cost.usd.toFixed(4)})
+      ・ 音声 ${u.audio_sec ?? '-'}秒 ・ トークン 入力${u.prompt_tokens ?? 0} / 出力${u.completion_tokens ?? 0}${u.model ? ` (${esc(u.model)})` : ''}</div>`);
+  }
+
+  $('viewResult').innerHTML = h.join('');
+  showView('result');
+}
+
+function nextQuestion(p) {
+  showView('practice');
+  part = null;
+  selectPart(p);
+}
+
+async function openSession(id) {
+  try { renderResult(await api(`/api/session/${encodeURIComponent(id)}`)); }
+  catch (e) { alert(e.message); }
+}
+
+// ---------------------------------------------------------------- 履歴画面
+let history = [];
+const METRICS = [
+  { key: 'wpm', label: '話す速さ (WPM)', fmt: v => Math.round(v), span: 20 },
+  { key: 'fillers', label: 'フィラー回数', fmt: v => Math.round(v), span: 4, zero: true },
+  { key: 'pauses', label: '1秒以上の沈黙の回数', fmt: v => Math.round(v), span: 4, zero: true },
+  { key: 'longest_pause', label: '最長の沈黙 (秒)', fmt: v => v.toFixed(1), span: 2, zero: true },
+  { key: 'lexical_diversity', label: '語彙の多様さ', fmt: v => v.toFixed(2), span: 0.2 },
+  { key: 'duration_sec', label: '話した時間 (秒)', fmt: v => Math.round(v), span: 40, zero: true },
+];
+$('chartMetric').innerHTML = METRICS.map(m => `<option value="${m.key}">${m.label}</option>`).join('');
+
+async function loadHistory() {
+  try { history = await api('/api/history'); } catch (e) { history = []; }
+  const ok = history.filter(r => r.ok);
+  const total = history.reduce((a, r) => a + (r.cost_jpy || 0), 0);
+  $('histSummary').textContent = `${ok.length}回 ・ 累計費用 約¥${total.toFixed(0)}`;
+  $('histEmpty').textContent = history.length ? '' : 'まだ練習の記録がありません。';
+  const bandTxt = b => b ? [b.fluency_coherence, b.lexical_resource, b.grammar].map(v => Number(v).toFixed(1)).join(' / ') : '—';
+  const n = (v, f = x => x) => v == null ? '—' : f(v);
+  $('histTable').querySelector('tbody').innerHTML = history.map(r => `<tr onclick="openSession('${esc(r.id)}')">
+      <td style="white-space:nowrap">${fmtDate(r.created_at)}</td><td>${r.part}</td>
+      <td>${esc(r.question)}</td><td class="num">${n(r.duration_sec, mmss)}</td><td class="num">${n(r.wpm, Math.round)}</td>
+      <td class="num">${n(r.fillers)}</td><td class="num">${n(r.fillers_check)}</td><td class="num">${n(r.pauses)}</td>
+      <td class="num">${n(r.longest_pause, v => v.toFixed(1) + 's')}</td><td class="num">${n(r.lexical_diversity, v => v.toFixed(2))}</td>
+      <td class="num" style="white-space:nowrap">${bandTxt(r.band)}</td><td class="num">${n(r.cost_jpy, v => '¥' + v.toFixed(1))}</td></tr>`).join('');
+  drawChart();
+}
+
+function drawChart() {
+  const metric = METRICS.find(m => m.key === $('chartMetric').value);
+  const pf = $('chartPart').value;
+  const rows = history.filter(r => r.ok && r[metric.key] != null && (!pf || String(r.part) === pf)).slice().reverse();
+  const wrap = $('chartWrap');
+  if (rows.length < 2) {
+    wrap.innerHTML = `<div class="muted" style="padding:30px 0; text-align:center">2回以上練習するとグラフが表示されます。</div>`;
+    $('chartNote').textContent = '';
+    return;
+  }
+  const W = wrap.clientWidth || 880, H = 240, L = 44, R = 16, T = 14, B = 28;
+  const vals = rows.map(r => r[metric.key]);
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (metric.zero) lo = 0;
+  if (hi - lo < metric.span) { const mid = (hi + lo) / 2; lo = metric.zero ? 0 : mid - metric.span / 2; hi = lo + metric.span; }
+  else { const pad = (hi - lo) * 0.1; hi += pad; if (!metric.zero) lo -= pad; }
+  const x = i => L + (rows.length === 1 ? 0 : i * (W - L - R) / (rows.length - 1));
+  const y = v => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
+  const ticks = [0, 1, 2, 3, 4].map(k => lo + (hi - lo) * k / 4);
+  const grid = ticks.map(t => `<line x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}"/>`).join('');
+  const yLabels = ticks.map(t => `<text x="${L - 6}" y="${y(t) + 4}" text-anchor="end">${metric.fmt(t)}</text>`).join('');
+  const step = Math.ceil(rows.length / 8);
+  const xLabels = rows.map((r, i) => i % step === 0 || i === rows.length - 1
+    ? `<text x="${x(i)}" y="${H - 8}" text-anchor="middle">${fmtDate(r.created_at).split(' ')[0]}</text>` : '').join('');
+  const path = rows.map((r, i) => `${i ? 'L' : 'M'}${x(i)},${y(r[metric.key])}`).join('');
+  const dots = rows.map((r, i) => `<circle cx="${x(i)}" cy="${y(r[metric.key])}" r="4.5" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/>
+      <circle cx="${x(i)}" cy="${y(r[metric.key])}" r="14" fill="transparent" data-i="${i}" style="cursor:pointer"/>`).join('');
+  wrap.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${metric.label}の推移">
+      <g class="grid">${grid}</g><g class="axis">${yLabels}${xLabels}</g>
+      <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>${dots}</svg>
+    <div class="tooltip hidden" id="tip"></div>`;
+  const tip = $('tip');
+  wrap.querySelectorAll('circle[data-i]').forEach(c => {
+    const r = rows[+c.dataset.i];
+    c.addEventListener('mouseenter', () => {
+      tip.innerHTML = `${fmtDate(r.created_at)} · Part ${r.part}<br><b>${metric.label}: ${metric.fmt(r[metric.key])}</b>`;
+      tip.style.left = (c.cx.baseVal.value / W * wrap.clientWidth) + 'px';
+      tip.style.top = (c.cy.baseVal.value / H * 240) + 'px';
+      show(tip);
+    });
+    c.addEventListener('mouseleave', () => show(tip, false));
+    c.addEventListener('click', () => openSession(r.id));
+  });
+  $('chartNote').textContent = `${rows.length}回分(古い順)。点をクリックするとその回の結果を開きます。`;
+}
+
+loadFocus();
+</script>
+</body>
+</html>
