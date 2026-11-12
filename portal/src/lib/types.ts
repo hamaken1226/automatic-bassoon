@@ -53,3 +53,65 @@ export type NoteWithDetails = Note & {
   note_items: NoteItem[];
   note_tag_links: { tag_id: string }[];
 };
+
+// ---- 勤怠・勉強・ドラム ----
+
+export type AttendanceKind = Row & {
+  name: string;
+  color: string;
+  special: "study" | "drum" | "none";
+  sort_order: number;
+};
+
+export type AttendanceRecord = Row & {
+  kind_id: string;
+  started_at: string;
+  ended_at: string | null;
+  is_running: boolean;
+  initiative_id: string | null;
+  subject_id: string | null;
+  material_id: string | null;
+  page_reached: number | null;
+  song_id: string | null;
+  memo: string;
+  source: "manual" | "ielts";
+};
+
+export type Initiative = Row & {
+  type: "exam" | "practice";
+  name: string;
+  exam_date: string | null;
+  memo: string;
+  sort_order: number;
+};
+
+export type Subject = Row & { initiative_id: string; name: string; sort_order: number };
+
+export type Material = Row & {
+  subject_id: string;
+  name: string;
+  total_pages: number | null;
+  current_page: number;
+};
+
+export type Plan = Row & {
+  subject_id: string;
+  material_id: string;
+  content: string;
+  start_page: number;
+  end_page: number;
+  start_date: string;
+  end_date: string;
+};
+
+export type Song = Row & { initiative_id: string; title: string; artist: string; memo: string };
+
+export type BandPractice = Row & {
+  initiative_id: string | null;
+  date: string;
+  place_memo: string;
+  band_practice_songs: { song_id: string }[];
+};
+
+/** 日時付きのメモ（タスクの作業ログ・曲の練習ログ） */
+export type LogEntry = Row & { logged_at: string; body: string };

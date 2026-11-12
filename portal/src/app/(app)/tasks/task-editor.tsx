@@ -1,8 +1,9 @@
 "use client";
 
-import { ExternalLink, Pencil, Plus, Trash2 } from "lucide-react";
+import { ExternalLink, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { LogList } from "@/components/log-list";
 import { Modal } from "@/components/ui/modal";
 import {
   dangerButton,
@@ -12,12 +13,12 @@ import {
   primaryButton,
   secondaryButton,
 } from "@/components/ui/styles";
-import { formatDateTime, todayJst, WEEKDAY_LABELS, weekdayOf } from "@/lib/date";
+import { todayJst, WEEKDAY_LABELS, weekdayOf } from "@/lib/date";
 import { findLinkTarget, LINK_TARGETS } from "@/lib/links";
 import type { RuleType } from "@/lib/recurrence";
 import { getSupabase } from "@/lib/supabase/client";
 import { TASK_SELECT } from "@/lib/tasks";
-import type { Subtask, TaskCategory, TaskLog, TaskWithDetails } from "@/lib/types";
+import type { Subtask, TaskCategory, TaskWithDetails } from "@/lib/types";
 
 type Repeat = "none" | RuleType;
 
@@ -64,23 +65,9 @@ export function TaskEditor({
   const [error, setError] = useState<string | null>(null);
 
   const [newSubtask, setNewSubtask] = useState("");
-  const [logs, setLogs] = useState<TaskLog[] | null>(null);
-  const [newLog, setNewLog] = useState("");
-  const [editingLog, setEditingLog] = useState<{ id: string; body: string } | null>(null);
 
   const subtasks = [...task.subtasks].sort(bySort);
   const link = findLinkTarget(task.link_target);
-
-  useEffect(() => {
-    sb.from("task_logs")
-      .select("*")
-      .eq("task_id", task.id)
-      .order("logged_at", { ascending: false })
-      .then(({ data, error }) => {
-        if (error) setError(error.message);
-        else setLogs(data as TaskLog[]);
-      });
-  }, [sb, task.id]);
 
   /** 入力欄の変更（未保存の印を付ける） */
   const edit =
@@ -205,37 +192,6 @@ export function TaskEditor({
     const { error } = await sb.from("subtasks").delete().eq("id", subtask.id);
     if (error) return setError(error.message);
     setSubtasks(task.subtasks.filter((s) => s.id !== subtask.id));
-  };
-
-  // ---- 作業ログ（その場で保存） ----
-  const addLog = async () => {
-    const trimmed = newLog.trim();
-    if (!trimmed) return;
-    const { data, error } = await sb
-      .from("task_logs")
-      .insert({ task_id: task.id, body: trimmed })
-      .select("*")
-      .single();
-    if (error) return setError(error.message);
-    setLogs((prev) => [data as TaskLog, ...(prev ?? [])]);
-    setNewLog("");
-  };
-
-  const saveLog = async () => {
-    if (!editingLog) return;
-    const trimmed = editingLog.body.trim();
-    if (!trimmed) return;
-    const { error } = await sb.from("task_logs").update({ body: trimmed }).eq("id", editingLog.id);
-    if (error) return setError(error.message);
-    setLogs((prev) => (prev ?? []).map((l) => (l.id === editingLog.id ? { ...l, body: trimmed } : l)));
-    setEditingLog(null);
-  };
-
-  const removeLog = async (log: TaskLog) => {
-    if (!window.confirm("この作業ログを削除しますか？")) return;
-    const { error } = await sb.from("task_logs").delete().eq("id", log.id);
-    if (error) return setError(error.message);
-    setLogs((prev) => (prev ?? []).filter((l) => l.id !== log.id));
   };
 
   return (
@@ -461,71 +417,13 @@ export function TaskEditor({
 
         <section aria-label="作業ログ" className="border-t border-border pt-4">
           <h3 className={labelClass}>作業ログ</h3>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              addLog();
-            }}
-            className="flex items-end gap-2"
-          >
-            <textarea
-              rows={1}
-              aria-label="作業ログを追加"
-              placeholder="やったこと・気づいたことをメモ"
-              value={newLog}
-              onChange={(e) => setNewLog(e.target.value)}
-              className={`${inputClass} [field-sizing:content] min-h-10`}
-            />
-            <button type="submit" disabled={!newLog.trim()} className={`${secondaryButton} shrink-0`}>
-              記録
-            </button>
-          </form>
-          {logs === null ? (
-            <p className="mt-3 text-sm text-muted">読み込み中…</p>
-          ) : (
-            <ul className="mt-3 space-y-2">
-              {logs.map((log) => (
-                <li key={log.id} className="rounded-lg border border-border px-3 py-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <time className="text-xs text-muted">{formatDateTime(log.logged_at)}</time>
-                    <span className="flex">
-                      <button
-                        type="button"
-                        aria-label="作業ログを編集"
-                        className={`${iconButton} size-7`}
-                        onClick={() => setEditingLog({ id: log.id, body: log.body })}
-                      >
-                        <Pencil className="size-3.5" aria-hidden />
-                      </button>
-                      <button type="button" aria-label="作業ログを削除" className={`${iconButton} size-7`} onClick={() => removeLog(log)}>
-                        <Trash2 className="size-3.5" aria-hidden />
-                      </button>
-                    </span>
-                  </div>
-                  {editingLog?.id === log.id ? (
-                    <div className="mt-1 space-y-2">
-                      <textarea
-                        aria-label="作業ログの内容"
-                        value={editingLog.body}
-                        onChange={(e) => setEditingLog({ id: log.id, body: e.target.value })}
-                        className={`${inputClass} [field-sizing:content] min-h-10`}
-                      />
-                      <div className="flex justify-end gap-2">
-                        <button type="button" className={secondaryButton} onClick={() => setEditingLog(null)}>
-                          キャンセル
-                        </button>
-                        <button type="button" className={primaryButton} onClick={saveLog}>
-                          更新
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="mt-0.5 whitespace-pre-wrap break-words text-sm">{log.body}</p>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
+          <LogList
+            table="task_logs"
+            parentColumn="task_id"
+            parentId={task.id}
+            label="作業ログ"
+            placeholder="やったこと・気づいたことをメモ"
+          />
         </section>
       </div>
     </Modal>

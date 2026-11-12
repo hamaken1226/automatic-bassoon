@@ -75,3 +75,48 @@ export function formatDateTime(iso: string): string {
   const year = get("year") === todayJst().slice(0, 4) ? "" : `${get("year")}/`;
   return `${year}${get("month")}/${get("day")} ${get("hour")}:${get("minute")}`;
 }
+
+// ---- 日時（ISO文字列）と日本時間の相互変換 ----
+
+/** 日時 → 日本時間での日付（YYYY-MM-DD） */
+export function jstDateOf(iso: string): string {
+  return todayJst(new Date(iso));
+}
+
+/** 日時 → <input type="datetime-local"> 用の日本時間（YYYY-MM-DDTHH:mm） */
+export function toJstInput(iso: string): string {
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  })
+    .format(new Date(iso))
+    .replace(" ", "T");
+}
+
+/** <input type="datetime-local"> の値（日本時間）→ 日時 */
+export function fromJstInput(value: string): string {
+  return new Date(`${value}:00+09:00`).toISOString();
+}
+
+/** 日時 → 「21:30」（日本時間） */
+export function formatTime(iso: string): string {
+  return toJstInput(iso).slice(11);
+}
+
+/** その日を含む週の月曜日 */
+export function weekStart(date: string): string {
+  return addDays(date, -((weekdayOf(date) + 6) % 7));
+}
+
+/** 分 → 「1時間30分」 */
+export function formatMinutes(minutes: number): string {
+  const m = Math.round(minutes);
+  const h = Math.floor(m / 60);
+  if (h === 0) return `${m}分`;
+  return m % 60 === 0 ? `${h}時間` : `${h}時間${m % 60}分`;
+}
