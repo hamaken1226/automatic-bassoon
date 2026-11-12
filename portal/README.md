@@ -18,31 +18,63 @@
 
 ## セットアップ
 
-### 1. Supabase
+公開先のURLはVercelにデプロイしたときに発行されるので、
+「Supabaseの準備 → Vercelにデプロイ → SupabaseにURLを登録」の順に進める。
+
+### 1. Supabaseの準備
 
 1. [Supabase](https://supabase.com/) で新しいプロジェクトを作る（無料プラン）
 2. **SQL Editor** に [`supabase/migrations/0001_init.sql`](./supabase/migrations/0001_init.sql) の中身を貼り付けて実行する（全テーブルとRow Level Securityが作られる）
 3. 接続情報を控える
    - Project URL: **Project Settings → Data API**（または画面上部の「Connect」）に表示される `https://xxxx.supabase.co`
    - キー: **Project Settings → API Keys** の「Publishable key」（`sb_publishable_...`）。「Legacy API Keys」タブの「anon public」でもよい。`service_role` / Secret key は使わない
-4. 左端のメインメニューの **Authentication**（Project Settingsの中ではない）→ **URL Configuration**
-   - Site URL: 公開先のURL（例: `https://xxxx.vercel.app`）
-   - Redirect URLs: `https://xxxx.vercel.app/auth/callback` と `http://localhost:3000/auth/callback` を追加
-5. **Authentication → Emails → Magic Link** のテンプレート本文に `{{ .Token }}` を追加する（例: `コード: {{ .Token }}`）。
-   ホーム画面に追加したPWAではメールのリンクが別のブラウザで開いてしまうため、メールに書かれたコードを入力してログインできるようにするためのもの。テンプレート内の「Confirm your signup」にも同じように入れておく（初回ログイン時はこちらが届く）
 
-### 2. 環境変数
+### 2. Vercel にデプロイ
 
-`.env.example` を `.env.local` にコピーして値を入れる（`.env.local` はGitに含めない）。
+1. Vercel で「Add New → Project」からこのGitHubリポジトリを選ぶ
+2. **Root Directory** を `portal` に設定する（リポジトリ直下には別のアプリがあるため）
+3. **Environment Variables** に次を登録する
 
-| 変数 | 内容 |
-|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | SupabaseのProject URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | SupabaseのPublishable key（またはanon publicキー） |
-| `ALLOWED_EMAIL` | ログインを許可する自分のメールアドレス。これ以外はアプリ側で弾く |
-| `GOOGLE_CALENDAR_ICAL_URL` | Googleカレンダーの非公開iCal URL（フェーズ5で使用。サーバー側だけで使う） |
+   | 変数 | 内容 |
+   |---|---|
+   | `NEXT_PUBLIC_SUPABASE_URL` | SupabaseのProject URL |
+   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | SupabaseのPublishable key（またはanon publicキー） |
+   | `ALLOWED_EMAIL` | ログインを許可する自分のメールアドレス。これ以外はアプリ側で弾く |
+   | `GOOGLE_CALENDAR_ICAL_URL` | Googleカレンダーの非公開iCal URL（フェーズ5で使用。それまでは未登録でよい） |
 
-### 3. ローカルで動かす
+4. デプロイする。完了すると公開先のURL（`https://プロジェクト名.vercel.app`）が発行される。
+   プロジェクトページの「Domains」に出る短いURLが本番用（デプロイごとに出る長いURLではない）
+
+Vercelは本番ブランチ（初期設定は `main`）をデプロイする。`portal/` が本番ブランチに入っていないと
+「Root Directory が見つからない」と失敗するので、先にマージしておく。
+以後は、本番ブランチへのpushで自動デプロイされる。
+
+### 3. Supabaseに公開先のURLを登録
+
+左端のメインメニューの **Authentication**（Project Settingsの中ではない）で設定する。
+
+1. **URL Configuration**
+   - Site URL: 手順2で発行されたURL（例: `https://xxxx.vercel.app`）
+   - Redirect URLs: `https://xxxx.vercel.app/auth/callback` を追加（ローカルでも動かすなら `http://localhost:3000/auth/callback` も）
+2. **Emails → Magic Link** のテンプレート本文に `{{ .Token }}` を追加する（例: `コード: {{ .Token }}`）。
+   ホーム画面に追加したPWAではメールのリンクが別のブラウザで開いてしまうため、メールに書かれたコードを入力してログインできるようにするためのもの。「Confirm signup」のテンプレートにも同じように入れておく（初回ログイン時はこちらが届く）
+
+### 4. ログインして、新規登録を無効にする
+
+1. 公開先のURLを開き、`ALLOWED_EMAIL` のメールアドレスでログインする
+2. ログインできたら、Supabaseの **Authentication → Sign In / Providers** で
+   「Allow new users to sign up」をオフにして、新規登録を無効にする
+
+### 5. スマホのホーム画面に追加（PWA）
+
+- iPhone（Safari）: 共有ボタン →「ホーム画面に追加」
+- Android（Chrome）: メニュー →「ホーム画面に追加」／「アプリをインストール」
+
+ホーム画面から開いたあと、メールアドレスを入力し、届いたメールのコードを入力してログインする。
+
+### ローカルで動かす場合（任意）
+
+`.env.example` を `.env.local` にコピーして、手順2と同じ値を入れる（`.env.local` はGitに含めない）。
 
 ```bash
 npm install
@@ -52,28 +84,7 @@ npm install
 npm run dev
 ```
 
-`http://localhost:3000` を開き、`ALLOWED_EMAIL` のメールアドレスでログインする。
-
-### 4. Vercel にデプロイ
-
-1. Vercel で「Add New → Project」からこのGitHubリポジトリを選ぶ
-2. **Root Directory** を `portal` に設定する（リポジトリ直下には別のアプリがあるため）
-3. 上の環境変数4つを **Environment Variables** に登録する
-4. デプロイ後、発行されたURLをSupabaseの Site URL / Redirect URLs に設定する（手順1-4）
-
-以後は、Vercelで本番ブランチに設定したブランチへのpushで自動デプロイされる。
-
-### 5. 初回ログイン後にやること
-
-自分のアカウントでログインできたら、Supabaseの **Authentication → Sign In / Providers** で
-「Allow new users to sign up」をオフにして、新規登録を無効にする。
-
-### 6. スマホのホーム画面に追加（PWA）
-
-- iPhone（Safari）: 共有ボタン →「ホーム画面に追加」
-- Android（Chrome）: メニュー →「ホーム画面に追加」／「アプリをインストール」
-
-ホーム画面から開いたあと、メールアドレスを入力し、届いたメールのコードを入力してログインする。
+`http://localhost:3000` を開いてログインする。
 
 ## データ保護の仕組み
 
