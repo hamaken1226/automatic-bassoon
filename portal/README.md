@@ -22,8 +22,10 @@
 
 1. [Supabase](https://supabase.com/) で新しいプロジェクトを作る（無料プラン）
 2. **SQL Editor** に [`supabase/migrations/0001_init.sql`](./supabase/migrations/0001_init.sql) の中身を貼り付けて実行する（全テーブルとRow Level Securityが作られる）
-3. **Project Settings → API** から「Project URL」と「anon public」キーを控える
-4. **Authentication → URL Configuration**
+3. 接続情報を控える
+   - Project URL: **Project Settings → Data API**（または画面上部の「Connect」）に表示される `https://xxxx.supabase.co`
+   - キー: **Project Settings → API Keys** の「Publishable key」（`sb_publishable_...`）。「Legacy API Keys」タブの「anon public」でもよい。`service_role` / Secret key は使わない
+4. 左端のメインメニューの **Authentication**（Project Settingsの中ではない）→ **URL Configuration**
    - Site URL: 公開先のURL（例: `https://xxxx.vercel.app`）
    - Redirect URLs: `https://xxxx.vercel.app/auth/callback` と `http://localhost:3000/auth/callback` を追加
 5. **Authentication → Emails → Magic Link** のテンプレート本文に `{{ .Token }}` を追加する（例: `コード: {{ .Token }}`）。
@@ -36,7 +38,7 @@
 | 変数 | 内容 |
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | SupabaseのProject URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabaseのanon publicキー |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | SupabaseのPublishable key（またはanon publicキー） |
 | `ALLOWED_EMAIL` | ログインを許可する自分のメールアドレス。これ以外はアプリ側で弾く |
 | `GOOGLE_CALENDAR_ICAL_URL` | Googleカレンダーの非公開iCal URL（フェーズ5で使用。サーバー側だけで使う） |
 
