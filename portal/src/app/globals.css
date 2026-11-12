@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f6f6f4;
+  --card: #ffffff;
+  --foreground: #1c1c1a;
+  --muted: #6b6b66;
+  --border: #e3e3de;
+  --accent: #2f6f5e;
+  --accent-foreground: #ffffff;
+  --accent-soft: #e4f0ec;
+  --danger: #b3382c;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #141413;
+    --card: #1e1e1c;
+    --foreground: #ecece8;
+    --muted: #9c9c95;
+    --border: #30302d;
+    --accent: #6fbfa8;
+    --accent-foreground: #10201b;
+    --accent-soft: #1f302b;
+    --danger: #e58378;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --font-sans:
+    system-ui, -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN",
+    "Noto Sans JP", "Yu Gothic UI", Meiryo, sans-serif;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
