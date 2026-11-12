@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { expandEvents } from "./calendar-parse";
+import { expandEvents, sortEvents, splitCalendarUrls } from "./calendar-parse";
 
 const ics = (events: string) =>
   [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
     "PRODID:-//Google Inc//Google Calendar 70.9054//EN",
+    "X-WR-CALNAME:個人",
     "BEGIN:VTIMEZONE",
     "TZID:Asia/Tokyo",
     "BEGIN:STANDARD",
@@ -96,5 +97,19 @@ describe("iCalの展開", () => {
       "朝ラン 2026-11-14T22:00:00.000Z", // 11/15 7:00
       // 11/15(日) のバンド練習は中止
     ]);
+  });
+});
+
+describe("複数のカレンダー", () => {
+  it("URLを改行・カンマで区切って読む（重複と不正な値は除く）", () => {
+    expect(
+      splitCalendarUrls(" https://a.example/basic.ics,\nhttps://b.example/basic.ics  https://a.example/basic.ics\nfoo "),
+    ).toEqual(["https://a.example/basic.ics", "https://b.example/basic.ics"]);
+    expect(splitCalendarUrls(undefined)).toEqual([]);
+  });
+  it("カレンダー名を持ち、合わせて時刻順に並べる", () => {
+    const a = expandEvents(ics(ev(["UID:1", "SUMMARY:A", "DTSTART;TZID=Asia/Tokyo:20261112T150000", "DTEND;TZID=Asia/Tokyo:20261112T160000"])), "2026-11-12", 4);
+    const b = expandEvents(ics(ev(["UID:2", "SUMMARY:B", "DTSTART;TZID=Asia/Tokyo:20261112T090000", "DTEND;TZID=Asia/Tokyo:20261112T100000"])).replace("個人", "仕事"), "2026-11-12", 4);
+    expect(sortEvents([...a, ...b]).map((e) => `${e.title}:${e.calendar}`)).toEqual(["B:仕事", "A:個人"]);
   });
 });

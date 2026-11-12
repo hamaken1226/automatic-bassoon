@@ -44,7 +44,7 @@
    | `NEXT_PUBLIC_SUPABASE_URL` | SupabaseのProject URL |
    | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | SupabaseのPublishable key（またはanon publicキー） |
    | `ALLOWED_EMAIL` | ログインを許可する自分のメールアドレス。これ以外はアプリ側で弾く |
-   | `GOOGLE_CALENDAR_ICAL_URL` | Googleカレンダーの「iCal形式の非公開URL」（ホームの予定カードで使用。下の「Googleカレンダーの連携」参照） |
+   | `GOOGLE_CALENDAR_ICAL_URL` | Googleカレンダーの「iCal形式の非公開URL」。複数なら改行かカンマで区切る（下の「Googleカレンダーの連携」参照） |
 
 4. デプロイする。完了すると公開先のURL（`https://プロジェクト名.vercel.app`）が発行される。
    プロジェクトページの「Domains」に出る短いURLが本番用（デプロイごとに出る長いURLではない）
@@ -77,6 +77,9 @@ Vercelは本番ブランチ（初期設定は `main`）をデプロイする。`
 2. 左の「マイカレンダーの設定」から表示したいカレンダーを選ぶ
 3. 「カレンダーの統合」にある **「iCal 形式の非公開URL」** をコピーする（`https://calendar.google.com/calendar/ical/.../private-.../basic.ics`）
 4. Vercelの環境変数 `GOOGLE_CALENDAR_ICAL_URL` に登録して、デプロイし直す
+
+複数のカレンダーを表示するときは、それぞれのURLを **改行かカンマで区切って** 同じ変数に並べる（例: `https://…/basic.ics,https://…/basic.ics`）。
+予定にはカレンダーの名前が小さく付く。一部のカレンダーだけ読めなかったときは、読めた分を表示して「一部のカレンダーを読み込めませんでした」と出る。
 
 このURLを知っている人は誰でも予定を見られるので、他の場所には貼らない。アプリではサーバー側だけで使い、ブラウザには渡さない。
 取得結果は15分ほどキャッシュするので、カレンダーの変更がホームに出るまで少しかかる。
