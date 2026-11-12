@@ -177,3 +177,73 @@ export type BalanceCheckItem = Row & {
 };
 
 export type BalanceCheck = Row & { checked_on: string; balance_check_items: BalanceCheckItem[] };
+
+// ---- 謎解きメモ ----
+
+export type NazoTag = Row & { name: string };
+
+export type NazoIdea = Row & {
+  title: string;
+  body: string;
+  answer: string | null;
+  explanation: string | null;
+  nazo_idea_tags: { tag_id: string }[];
+};
+
+export type NazoResult = "success" | "failure";
+export type NazoFormat = "room" | "hall" | "walk" | "online" | "other";
+
+export type NazoPerformance = Row & {
+  title: string;
+  organizer: string;
+  attended_on: string | null;
+  links: string[];
+  review: string;
+  result: NazoResult | null;
+  rating: number | null;
+  format: NazoFormat | null;
+  companions: string | null;
+};
+
+export type NazoGimmick = Row & { title: string; memo: string };
+
+// ---- IELTS ----
+
+export type IeltsDetails = {
+  // Reading / Listening
+  difficulty?: number | null;
+  correct?: number | null;
+  total?: number | null;
+  // Writing
+  task?: 1 | 2;
+  prompt?: string;
+  essay?: string;
+  task_response?: number | null;
+  coherence_cohesion?: number | null;
+  lexical_resource?: number | null;
+  grammar?: number | null;
+  feedback?: string;
+  // Speaking
+  part?: string;
+  question?: string;
+  fluency?: number | null;
+  speaking_lexical?: number | null;
+  speaking_grammar?: number | null;
+  pronunciation?: number | null;
+  wpm?: number | null;
+  fillers?: number | null;
+  pauses?: number | null;
+  recorded_at?: string;
+};
+
+export type IeltsRecord = Row & {
+  skill: "listening" | "reading" | "writing" | "speaking";
+  date: string;
+  source: string;
+  band: number | null;
+  minutes: number | null;
+  notes: string;
+  details: IeltsDetails;
+  import_filename: string | null;
+  attendance_record_id: string | null;
+};

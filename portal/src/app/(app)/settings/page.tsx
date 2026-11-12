@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { PageHeader } from "@/components/page-header";
 import { SignOutButton } from "@/components/sign-out-button";
 import { requireUser } from "@/lib/auth";
+import { IeltsSettings } from "./ielts-settings";
 import { MoneySettings } from "./money-settings";
 
 export const metadata: Metadata = { title: "設定" };
@@ -27,6 +28,8 @@ export default function Page() {
       </section>
       <h2 className="mt-6 mb-2 text-sm font-semibold text-muted">お金</h2>
       <MoneySettings />
+      <h2 className="mt-6 mb-2 text-sm font-semibold text-muted">IELTS</h2>
+      <IeltsSettings />
     </>
   );
 }

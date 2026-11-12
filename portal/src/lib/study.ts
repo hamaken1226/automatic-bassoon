@@ -24,7 +24,18 @@ const SEED_KEY = "seed_study_v1";
  * 初めて使うときに、初期データ（勤怠の種類・取り組み）を1回だけ作る。
  * 作成済みの印を settings に残すので、あとで削除しても復活しない。
  */
-export async function ensureStudySeed(sb: SupabaseClient): Promise<void> {
+let seeding: Promise<void> | null = null;
+
+export function ensureStudySeed(sb: SupabaseClient): Promise<void> {
+  // 同じ画面の複数の部品から呼ばれても、作成が終わるまで全員が待つ
+  seeding ??= createStudySeed(sb).catch((e) => {
+    seeding = null;
+    throw e;
+  });
+  return seeding;
+}
+
+async function createStudySeed(sb: SupabaseClient): Promise<void> {
   const done = check(await sb.from("settings").select("id").eq("key", SEED_KEY));
   if ((done as unknown[]).length > 0) return;
   // 先に印を付ける（2つの画面で同時に開いても二重に作らない）

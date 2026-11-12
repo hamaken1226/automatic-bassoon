@@ -27,7 +27,18 @@ function check<T>(res: Res): T {
 }
 
 /** 初めて使うときに、置き場所・カテゴリ・クレカの設定を1回だけ作る */
-async function ensureMoneySeed(sb: SupabaseClient): Promise<void> {
+let seeding: Promise<void> | null = null;
+
+function ensureMoneySeed(sb: SupabaseClient): Promise<void> {
+  // 同じ画面の複数の部品から呼ばれても、作成が終わるまで全員が待つ
+  seeding ??= createMoneySeed(sb).catch((e) => {
+    seeding = null;
+    throw e;
+  });
+  return seeding;
+}
+
+async function createMoneySeed(sb: SupabaseClient): Promise<void> {
   if (check<unknown[]>(await sb.from("settings").select("id").eq("key", SEED_KEY)).length > 0) return;
   const flag = await sb.from("settings").insert({ key: SEED_KEY, value: true });
   if (flag.error) return; // 別の画面が作成中

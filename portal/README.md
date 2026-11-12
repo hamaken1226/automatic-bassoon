@@ -14,7 +14,7 @@
 | 2 | タスク・メモ | 実装済み |
 | 3 | 勤怠・勉強・練習スケジュール | 実装済み |
 | 4 | お金 | 実装済み |
-| 5 | 謎解きメモ・IELTS・ホームの仕上げ | 未着手 |
+| 5 | 謎解きメモ・IELTS・ホームの仕上げ | 実装済み（Speakingツールの結果の取り込みだけ未対応） |
 
 ## セットアップ
 
@@ -44,7 +44,7 @@
    | `NEXT_PUBLIC_SUPABASE_URL` | SupabaseのProject URL |
    | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | SupabaseのPublishable key（またはanon publicキー） |
    | `ALLOWED_EMAIL` | ログインを許可する自分のメールアドレス。これ以外はアプリ側で弾く |
-   | `GOOGLE_CALENDAR_ICAL_URL` | Googleカレンダーの非公開iCal URL（フェーズ5で使用。それまでは未登録でよい） |
+   | `GOOGLE_CALENDAR_ICAL_URL` | Googleカレンダーの「iCal形式の非公開URL」（ホームの予定カードで使用。下の「Googleカレンダーの連携」参照） |
 
 4. デプロイする。完了すると公開先のURL（`https://プロジェクト名.vercel.app`）が発行される。
    プロジェクトページの「Domains」に出る短いURLが本番用（デプロイごとに出る長いURLではない）
@@ -70,6 +70,16 @@ Vercelは本番ブランチ（初期設定は `main`）をデプロイする。`
 1. 公開先のURLを開き、`ALLOWED_EMAIL` のメールアドレスでログインする
 2. ログインできたら、Supabaseの **Authentication → Sign In / Providers** で
    「Allow new users to sign up」をオフにして、新規登録を無効にする
+
+### Googleカレンダーの連携
+
+1. PCのブラウザでGoogleカレンダーを開き、右上の歯車 →「設定」
+2. 左の「マイカレンダーの設定」から表示したいカレンダーを選ぶ
+3. 「カレンダーの統合」にある **「iCal 形式の非公開URL」** をコピーする（`https://calendar.google.com/calendar/ical/.../private-.../basic.ics`）
+4. Vercelの環境変数 `GOOGLE_CALENDAR_ICAL_URL` に登録して、デプロイし直す
+
+このURLを知っている人は誰でも予定を見られるので、他の場所には貼らない。アプリではサーバー側だけで使い、ブラウザには渡さない。
+取得結果は15分ほどキャッシュするので、カレンダーの変更がホームに出るまで少しかかる。
 
 ### 5. スマホのホーム画面に追加（PWA）
 

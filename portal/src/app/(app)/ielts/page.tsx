@@ -1,8 +1,13 @@
 import type { Metadata } from "next";
-import { ComingSoon } from "@/components/coming-soon";
+import { Suspense } from "react";
+import { IeltsApp } from "./ielts-app";
 
 export const metadata: Metadata = { title: "IELTS" };
 
 export default function Page() {
-  return <ComingSoon title="IELTS" phase={5} />;
+  return (
+    <Suspense>
+      <IeltsApp />
+    </Suspense>
+  );
 }

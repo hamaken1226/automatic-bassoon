@@ -120,3 +120,9 @@ export function formatMinutes(minutes: number): string {
   if (h === 0) return `${m}分`;
   return m % 60 === 0 ? `${h}時間` : `${h}時間${m % 60}分`;
 }
+
+/** 日付（YYYY-MM-DD）を「2026年11月12日（木）」の形式で */
+export function formatDateLong(date: string): string {
+  const [y, m, d] = date.split("-").map(Number);
+  return `${y}年${m}月${d}日（${WEEKDAY_LABELS[weekdayOf(date)]}）`;
+}
