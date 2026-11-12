@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { ComingSoon } from "@/components/coming-soon";
+import { CheckApp } from "./check-app";
 
 export const metadata: Metadata = { title: "月次チェック" };
 
 export default function Page() {
-  return <ComingSoon title="月次チェック" phase={4} />;
+  return <CheckApp />;
 }

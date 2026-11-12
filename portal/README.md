@@ -13,7 +13,7 @@
 | 1 | 土台（ログイン、全テーブルとRLS、画面の枠、PWA） | 実装済み |
 | 2 | タスク・メモ | 実装済み |
 | 3 | 勤怠・勉強・練習スケジュール | 実装済み |
-| 4 | お金 | 未着手 |
+| 4 | お金 | 実装済み |
 | 5 | 謎解きメモ・IELTS・ホームの仕上げ | 未着手 |
 
 ## セットアップ
@@ -24,7 +24,11 @@
 ### 1. Supabaseの準備
 
 1. [Supabase](https://supabase.com/) で新しいプロジェクトを作る（無料プラン）
-2. **SQL Editor** に [`supabase/migrations/0001_init.sql`](./supabase/migrations/0001_init.sql) の中身を貼り付けて実行する（全テーブルとRow Level Securityが作られる）
+2. **SQL Editor** で、[`supabase/migrations/`](./supabase/migrations/) のSQLを番号順に1つずつ貼り付けて実行する
+   - `0001_init.sql`: 全テーブルとRow Level Security
+   - `0002_money.sql`: お金の機能の追加（貸しの回収、クレカの照合日など）
+
+   あとからSQLファイルが増えたときは、新しいものだけを実行する（実行済みのものをもう一度実行するとエラーになるが、データは壊れない）
 3. 接続情報を控える
    - Project URL: **Project Settings → Data API**（または画面上部の「Connect」）に表示される `https://xxxx.supabase.co`
    - キー: **Project Settings → API Keys** の「Publishable key」（`sb_publishable_...`）。「Legacy API Keys」タブの「anon public」でもよい。`service_role` / Secret key は使わない

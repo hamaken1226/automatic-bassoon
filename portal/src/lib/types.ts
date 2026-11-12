@@ -115,3 +115,65 @@ export type BandPractice = Row & {
 
 /** 日時付きのメモ（タスクの作業ログ・曲の練習ログ） */
 export type LogEntry = Row & { logged_at: string; body: string };
+
+// ---- お金 ----
+
+export type PlaceKind = "bank" | "cash" | "emoney" | "credit";
+export type TxType = "expense" | "income" | "transfer" | "adjustment" | "loan_collection";
+export type CollectMethod = "paypay" | "bank" | "cash";
+
+export type MoneyPlace = Row & { name: string; kind: PlaceKind; initial_balance: number; sort_order: number };
+
+export type MoneyCategory = Row & { name: string; direction: "expense" | "income"; sort_order: number };
+
+export type MoneyTx = Row & {
+  type: TxType;
+  date: string;
+  amount: number; // 自分の計上額（調整は符号付き）
+  total_amount: number | null; // まとめ払いの全額
+  place_id: string;
+  to_place_id: string | null;
+  category_id: string | null;
+  memo: string;
+  is_suica_charge: boolean;
+};
+
+export type Loan = Row & {
+  transaction_id: string;
+  person: string;
+  amount: number;
+  status: "open" | "collected";
+  collected_on: string | null;
+  collected_method: CollectMethod | null;
+  collected_transaction_id: string | null;
+};
+
+export type CardSetting = Row & {
+  place_id: string;
+  closing_day: number;
+  payment_day: number;
+  payment_month_offset: number;
+  debit_place_id: string | null;
+  check_day: number | null;
+};
+
+export type CardStatement = Row & {
+  place_id: string;
+  period_start: string;
+  period_end: string;
+  due_date: string;
+  app_amount: number;
+  actual_amount: number | null;
+  status: "unchecked" | "matched" | "mismatched";
+  payment_transaction_id: string | null;
+};
+
+export type BalanceCheckItem = Row & {
+  balance_check_id: string;
+  place_id: string;
+  app_balance: number;
+  actual_balance: number;
+  diff: number;
+};
+
+export type BalanceCheck = Row & { checked_on: string; balance_check_items: BalanceCheckItem[] };

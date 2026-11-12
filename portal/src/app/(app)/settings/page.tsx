@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { PageHeader } from "@/components/page-header";
 import { SignOutButton } from "@/components/sign-out-button";
 import { requireUser } from "@/lib/auth";
+import { MoneySettings } from "./money-settings";
 
 export const metadata: Metadata = { title: "設定" };
 
@@ -24,9 +25,8 @@ export default function Page() {
           <SignOutButton />
         </div>
       </section>
-      <p className="mt-4 text-sm text-muted">
-        各機能の設定項目は、その機能を実装するフェーズで追加します。
-      </p>
+      <h2 className="mt-6 mb-2 text-sm font-semibold text-muted">お金</h2>
+      <MoneySettings />
     </>
   );
 }

@@ -10,6 +10,8 @@
   --accent-foreground: #ffffff;
   --accent-soft: #e4f0ec;
   --danger: #b3382c;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -23,6 +25,8 @@
     --accent-foreground: #10201b;
     --accent-soft: #1f302b;
     --danger: #e58378;
+    --series-1: #3987e5;
+    --series-2: #d95926;
   }
 }
 
