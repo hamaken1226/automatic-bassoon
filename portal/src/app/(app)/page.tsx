@@ -8,7 +8,7 @@ import { formatJstDateLong } from "@/lib/date";
 const CARDS: { title: string; href?: string; phase: number; note: string }[] = [
   { title: "勤怠", href: "/attendance", phase: 3, note: "開始・終了ボタンと記録中の経過時間" },
   { title: "予定", phase: 5, note: "Googleカレンダーの今日〜3日後の予定" },
-  { title: "タスク", href: "/tasks", phase: 2, note: "期限切れと今日が期限のタスク" },
+  { title: "タスク", href: "/tasks", phase: 5, note: "期限切れと今日が期限のタスク" },
   { title: "勉強・練習", href: "/study", phase: 3, note: "今日の勉強時間・今日の計画・次のバンド練習" },
   { title: "お金", href: "/money", phase: 4, note: "今月の収支・未回収の貸し・次のクレカ支払日" },
   { title: "IELTS", href: "/ielts", phase: 5, note: "4技能の直近スコアとオーバーオールの目安" },
@@ -41,7 +41,7 @@ export default function HomePage() {
               </div>
               <p className="mt-2 text-sm text-muted">{card.note}</p>
               <p className="mt-3 inline-block rounded-full bg-accent-soft px-2.5 py-0.5 text-xs text-accent">
-                準備中（フェーズ{card.phase}）
+                ホームへの表示は準備中（フェーズ{card.phase}）
               </p>
             </>
           );

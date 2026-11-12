@@ -1,8 +1,13 @@
 import type { Metadata } from "next";
-import { ComingSoon } from "@/components/coming-soon";
+import { Suspense } from "react";
+import { NotesApp } from "./notes-app";
 
 export const metadata: Metadata = { title: "メモ" };
 
 export default function Page() {
-  return <ComingSoon title="メモ" phase={2} />;
+  return (
+    <Suspense>
+      <NotesApp />
+    </Suspense>
+  );
 }

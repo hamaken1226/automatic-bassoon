@@ -4,6 +4,7 @@ import { Menu, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
+import { NoteTagNav } from "./note-tag-nav";
 import { BOTTOM_NAV_ITEMS, MENU_ITEMS, isActive } from "@/lib/nav";
 
 const itemClass = (active: boolean) =>
@@ -66,6 +67,12 @@ export function BottomNav({ signOutSlot }: { signOutSlot: ReactNode }) {
                 );
               })}
             </div>
+            {isActive(pathname, "/notes") && (
+              <div className="mt-3 max-h-[35dvh] overflow-y-auto border-t border-border pt-2">
+                <p className="mb-1 px-2 text-xs font-semibold text-muted">メモの絞り込み</p>
+                <NoteTagNav onNavigate={() => setOpen(false)} />
+              </div>
+            )}
             <div className="mt-3 border-t border-border pt-2">{signOutSlot}</div>
           </div>
         </div>
