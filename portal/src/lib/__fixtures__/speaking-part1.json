@@ -1,0 +1,108 @@
+{
+  "id": "20261104-165252_part1",
+  "created_at": "2026-11-04T16:52:52",
+  "part": 1,
+  "question": {
+    "id": "p1-10",
+    "topic": "Food",
+    "question": "Do you prefer eating at home or eating out? Why?",
+    "part": 1
+  },
+  "metrics": {
+    "duration_sec": 42.5,
+    "word_count": 79,
+    "wpm": 111.6,
+    "pauses": {
+      "count": 1,
+      "longest_sec": 1.6,
+      "threshold_sec": 1.0,
+      "items": [
+        {
+          "after": "cook",
+          "before": "but",
+          "at_sec": 14.4,
+          "sec": 1.6
+        }
+      ]
+    },
+    "fillers": {
+      "total": 3,
+      "by_type": {
+        "uh": 2,
+        "er": 1
+      },
+      "check_total": 2,
+      "check_by_type": {
+        "like": 2
+      }
+    },
+    "repeated": [
+      {
+        "word": "food",
+        "count": 3,
+        "forms": [
+          "food"
+        ]
+      }
+    ],
+    "unique_words": 47,
+    "lexical_diversity": 0.59,
+    "part2_complete": null
+  },
+  "feedback": {
+    "band_estimate": {
+      "fluency_coherence": 6.5,
+      "lexical_resource": 6.0,
+      "grammar": 7.0,
+      "comment": "この回答は流暢さと一貫性が良好ですが、繰り返しやフィラーが目立ちます。"
+    },
+    "structure": {
+      "covered_points": [
+        "direct answer",
+        "reason",
+        "example/detail"
+      ],
+      "missing_points": [
+        "specific examples of dishes",
+        "personal experiences with eating out"
+      ],
+      "has_conclusion": false,
+      "comment": "結論が明確に示されていないため、話が途中で終わっている印象があります。"
+    },
+    "errors": [
+      {
+        "original": "there's a limitation of the range of dish",
+        "correction": "there's a limitation on the range of dishes",
+        "reason": "名詞の複数形が必要です。",
+        "category": "plural"
+      },
+      {
+        "original": "I can't choose anything like Chinese food or Japanese food or Japanese Italian or French, whatever.",
+        "correction": "I can choose from various options like Chinese food, Japanese food, Italian food, or French cuisine.",
+        "reason": "文の構造を改善し、より自然な表現にする必要があります。",
+        "category": "word_order"
+      },
+      {
+        "original": "I can pick what... I can pick and I can eat whatever I want.",
+        "correction": "I can choose what I want to eat.",
+        "reason": "繰り返しを避け、より簡潔にする必要があります。",
+        "category": "other"
+      }
+    ],
+    "paraphrases": [
+      {
+        "word": "food",
+        "alternatives": [
+          "cuisine",
+          "meal",
+          "dish",
+          "fare"
+        ]
+      }
+    ],
+    "model_answer": "I prefer eating out because there are many more options available compared to cooking at home. At home, I often have to work with what I have in the fridge, which limits my choices. However, when I eat out, I can enjoy a variety of cuisines, such as Chinese, Japanese, Italian, or French. This variety allows me to choose based on my mood and cravings, making dining out a more enjoyable experience overall.",
+    "next_focus": "次回は、フィラーの使用を減らし、結論を明確にすることに集中しましょう。"
+  },
+  "feedback_error": null,
+  "transcript": "Er, I prefer eating out because in my home, there's a limita"
+}

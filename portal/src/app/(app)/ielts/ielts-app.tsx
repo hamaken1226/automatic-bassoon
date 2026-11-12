@@ -11,11 +11,12 @@ import { formatDateShort, formatMinutes } from "@/lib/date";
 import { formatBand, overallBand, SKILL_LABEL, SKILLS, type Skill } from "@/lib/ielts";
 import { isActiveOn } from "@/lib/plans";
 import type { IeltsRecord } from "@/lib/types";
-import { useIelts, type IeltsData } from "@/lib/use-ielts";
+import { useIelts, type IeltsData, type IeltsStore } from "@/lib/use-ielts";
 import { useStudy } from "@/lib/use-study";
 import { useToday } from "@/lib/use-today";
 import { daysLeftLabel, ErrorNote, PlanRow } from "../study/shared";
 import { RecordForm } from "./record-form";
+import { SpeakingImport } from "./speaking-import";
 import { SpeakingTool } from "./speaking-tool";
 
 type Tab = "overview" | Skill;
@@ -33,10 +34,14 @@ export function latestBySkill(records: IeltsRecord[]): Partial<Record<Skill, Iel
   return latest;
 }
 
+/** 記録した順（同じ日はツールの記録時刻、なければ作成時刻の順） */
+const byOrder = (a: IeltsRecord, b: IeltsRecord) =>
+  a.date.localeCompare(b.date) || (a.details.recorded_at ?? a.created_at).localeCompare(b.details.recorded_at ?? b.created_at);
+
 function bandPoints(records: IeltsRecord[], skill: Skill) {
   return records
     .filter((r) => r.skill === skill && r.band != null)
-    .sort((a, b) => a.date.localeCompare(b.date) || a.created_at.localeCompare(b.created_at))
+    .sort(byOrder)
     .map((r) => ({ date: r.date, value: r.band!, label: r.source || undefined }));
 }
 
@@ -118,6 +123,7 @@ export function IeltsApp() {
       ) : (
         <SkillView
           skill={tab}
+          store={store}
           data={data}
           today={today}
           copied={copied === tab}
@@ -259,6 +265,7 @@ function Overview({
 
 function SkillView({
   skill,
+  store,
   data,
   today,
   copied,
@@ -267,6 +274,7 @@ function SkillView({
   onEdit,
 }: {
   skill: Skill;
+  store: IeltsStore;
   data: IeltsData;
   today: string;
   copied: boolean;
@@ -306,8 +314,8 @@ function SkillView({
   const metric = (key: "wpm" | "fillers" | "pauses") =>
     records
       .filter((r) => r.details[key] != null)
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .map((r) => ({ date: r.date, value: r.details[key] as number }));
+      .sort(byOrder)
+      .map((r) => ({ date: r.date, value: r.details[key] as number, label: r.details.part ? `Part ${r.details.part}` : undefined }));
   const metricChart = (key: "wpm" | "fillers" | "pauses", title: string) => {
     const points = metric(key);
     const maxValue = Math.max(1, ...points.map((p) => p.value));
@@ -344,6 +352,7 @@ function SkillView({
       </div>
 
       {skill === "speaking" && <SpeakingTool />}
+      {skill === "speaking" && <SpeakingImport store={store} />}
 
       <section aria-label="推移" className="rounded-xl border border-border bg-card p-4">
         <h2 className="mb-2 text-sm font-semibold">バンドスコアの推移</h2>

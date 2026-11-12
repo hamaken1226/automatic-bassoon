@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { diffDays, formatDateShort } from "@/lib/date";
+import { formatDateShort } from "@/lib/date";
 
 export type LinePoint = { date: string; value: number; label?: string };
 export type LineSeries = { name: string; color: string; points: LinePoint[] };
 
 /**
- * 日付を横軸にした折れ線グラフ。目標などの基準線（reference）を1本引ける。
+ * 記録した順に並べる折れ線グラフ（同じ日に何回も記録しても重ならない）。目標などの基準線（reference）を1本引ける。
  * 点をタップ（ホバー）すると下に値を表示する。
  */
 export function LineChart({
@@ -38,8 +38,8 @@ export function LineChart({
   }
   const dates = all.map((p) => p.date).sort();
   const first = dates[0];
-  const span = Math.max(1, diffDays(first, dates[dates.length - 1]));
-  const xPct = (d: string) => (all.length === 1 || span === 0 ? 50 : 4 + (diffDays(first, d) / span) * 92);
+  // 横位置は各系列の中での順番（点が1つなら真ん中）
+  const xPct = (i: number, count: number) => (count <= 1 ? 50 : 4 + (i / (count - 1)) * 92);
   const yPct = (v: number) => ((Math.min(max, Math.max(min, v)) - min) / (max - min || 1)) * 100;
   const shown = active ? series[active.s]?.points[active.i] : undefined;
   const last = series.map((s) => s.points[s.points.length - 1]).find(Boolean);
@@ -70,7 +70,7 @@ export function LineChart({
             {series.map((s) => (
               <polyline
                 key={s.name}
-                points={s.points.map((p) => `${xPct(p.date)},${100 - yPct(p.value)}`).join(" ")}
+                points={s.points.map((p, i) => `${xPct(i, s.points.length)},${100 - yPct(p.value)}`).join(" ")}
                 fill="none"
                 stroke={s.color}
                 strokeWidth={2}
@@ -90,7 +90,7 @@ export function LineChart({
                 onFocus={() => setActive({ s: si, i })}
                 onClick={() => setActive({ s: si, i })}
                 className="absolute flex size-6 -translate-x-1/2 translate-y-1/2 items-center justify-center"
-                style={{ left: `${xPct(p.date)}%`, bottom: `${yPct(p.value)}%` }}
+                style={{ left: `${xPct(i, s.points.length)}%`, bottom: `${yPct(p.value)}%` }}
               >
                 <span
                   className={`block rounded-full ring-2 ring-card ${active?.s === si && active.i === i ? "size-3" : "size-2"}`}
