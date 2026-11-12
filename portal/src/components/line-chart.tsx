@@ -3,7 +3,13 @@
 import { useState } from "react";
 import { formatDateShort } from "@/lib/date";
 
-export type LinePoint = { date: string; value: number; label?: string };
+export type LinePoint = {
+  date: string;
+  value: number;
+  label?: string;
+  /** 並べる順のキー（省略時は日付）。同じ日に複数あるときの順番に使う */
+  order?: string;
+};
 export type LineSeries = { name: string; color: string; points: LinePoint[] };
 
 /**
@@ -38,16 +44,35 @@ export function LineChart({
   }
   const dates = all.map((p) => p.date).sort();
   const first = dates[0];
-  // 横位置は各系列の中での順番（点が1つなら真ん中）
-  const xPct = (i: number, count: number) => (count <= 1 ? 50 : 4 + (i / (count - 1)) * 92);
+  // 横位置は全系列を通した順番（系列が複数でも時期がそろう。点が1つなら真ん中）
+  const ranked = series
+    .flatMap((s, si) => s.points.map((p, i) => ({ si, i, key: p.order ?? p.date })))
+    .sort((a, b) => a.key.localeCompare(b.key) || a.si - b.si || a.i - b.i);
+  const rank = new Map(ranked.map((r, n) => [`${r.si}-${r.i}`, n]));
+  const xPct = (si: number, i: number) => {
+    const count = ranked.length;
+    return count <= 1 ? 50 : 4 + ((rank.get(`${si}-${i}`) ?? 0) / (count - 1)) * 92;
+  };
   const yPct = (v: number) => ((Math.min(max, Math.max(min, v)) - min) / (max - min || 1)) * 100;
-  const shown = active ? series[active.s]?.points[active.i] : undefined;
-  const last = series.map((s) => s.points[s.points.length - 1]).find(Boolean);
-  const info = shown ?? last;
-  const infoSeries = active ? series[active.s] : series.find((s) => s.points.length > 0);
+  // 何も選んでいないときは、全系列で最も新しい点を出す
+  const newest = ranked[ranked.length - 1];
+  const current = active ?? (newest ? { s: newest.si, i: newest.i } : null);
+  const info = current ? series[current.s]?.points[current.i] : undefined;
+  const infoSeries = current ? series[current.s] : undefined;
 
   return (
     <div>
+      {/* 2本以上のときは凡例を出す（色だけに頼らない） */}
+      {series.length > 1 && (
+        <ul className="mb-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px]">
+          {series.map((s) => (
+            <li key={s.name} className="inline-flex items-center gap-1">
+              <span className="size-2 rounded-full" style={{ background: s.color }} />
+              {s.name}
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="flex gap-2">
         <div className={`flex ${height} w-7 shrink-0 flex-col-reverse justify-between text-right text-[10px] leading-none text-muted`} aria-hidden>
           {ticks.map((t) => (
@@ -67,10 +92,10 @@ export function LineChart({
             </div>
           )}
           <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full overflow-visible" aria-hidden>
-            {series.map((s) => (
+            {series.map((s, si) => (
               <polyline
                 key={s.name}
-                points={s.points.map((p, i) => `${xPct(i, s.points.length)},${100 - yPct(p.value)}`).join(" ")}
+                points={s.points.map((p, i) => `${xPct(si, i)},${100 - yPct(p.value)}`).join(" ")}
                 fill="none"
                 stroke={s.color}
                 strokeWidth={2}
@@ -90,7 +115,7 @@ export function LineChart({
                 onFocus={() => setActive({ s: si, i })}
                 onClick={() => setActive({ s: si, i })}
                 className="absolute flex size-6 -translate-x-1/2 translate-y-1/2 items-center justify-center"
-                style={{ left: `${xPct(i, s.points.length)}%`, bottom: `${yPct(p.value)}%` }}
+                style={{ left: `${xPct(si, i)}%`, bottom: `${yPct(p.value)}%` }}
               >
                 <span
                   className={`block rounded-full ring-2 ring-card ${active?.s === si && active.i === i ? "size-3" : "size-2"}`}

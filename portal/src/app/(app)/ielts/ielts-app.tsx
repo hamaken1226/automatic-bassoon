@@ -35,8 +35,8 @@ export function latestBySkill(records: IeltsRecord[]): Partial<Record<Skill, Iel
 }
 
 /** 記録した順（同じ日はツールの記録時刻、なければ作成時刻の順） */
-const byOrder = (a: IeltsRecord, b: IeltsRecord) =>
-  a.date.localeCompare(b.date) || (a.details.recorded_at ?? a.created_at).localeCompare(b.details.recorded_at ?? b.created_at);
+const orderKey = (r: IeltsRecord) => `${r.date} ${r.details.recorded_at ?? r.created_at}`;
+const byOrder = (a: IeltsRecord, b: IeltsRecord) => orderKey(a).localeCompare(orderKey(b));
 
 function bandPoints(records: IeltsRecord[], skill: Skill) {
   return records
@@ -311,21 +311,33 @@ function SkillView({
       .join("・");
   };
 
-  const metric = (key: "wpm" | "fillers" | "pauses") =>
-    records
-      .filter((r) => r.details[key] != null)
-      .sort(byOrder)
-      .map((r) => ({ date: r.date, value: r.details[key] as number, label: r.details.part ? `Part ${r.details.part}` : undefined }));
+  // Speaking は Part 1〜3 で分ける（Partが入っていない記録は「Part未入力」）
+  const partOf = (r: IeltsRecord) => (["1", "2", "3"].includes(r.details.part?.trim() ?? "") ? r.details.part!.trim() : "");
+  const parts = ["1", "2", "3", ...(records.some((r) => partOf(r) === "") ? [""] : [])];
+  const partName = (p: string) => (p ? `Part ${p}` : "Part未入力");
+  const partColor = (p: string) => (p ? `var(--series-${p})` : "var(--muted)");
+
+  const metricSeries = (key: "wpm" | "fillers" | "pauses") =>
+    parts
+      .map((part) => ({
+        name: partName(part),
+        color: partColor(part),
+        points: records
+          .filter((r) => partOf(r) === part && r.details[key] != null)
+          .sort(byOrder)
+          .map((r) => ({ date: r.date, value: r.details[key] as number, order: orderKey(r) })),
+      }))
+      .filter((s) => s.points.length > 0);
   const metricChart = (key: "wpm" | "fillers" | "pauses", title: string) => {
-    const points = metric(key);
-    const maxValue = Math.max(1, ...points.map((p) => p.value));
+    const series = metricSeries(key);
+    const maxValue = Math.max(1, ...series.flatMap((s) => s.points.map((p) => p.value)));
     const step = maxValue <= 10 ? 2 : maxValue <= 50 ? 10 : maxValue <= 100 ? 20 : 50;
     const top = Math.ceil(maxValue / step) * step;
     return (
       <div key={key}>
         <h3 className="mb-1 text-xs font-semibold text-muted">{title}</h3>
         <LineChart
-          series={[{ name: title, color: "var(--series-1)", points }]}
+          series={series}
           min={0}
           max={top}
           ticks={Array.from({ length: top / step + 1 }, (_, i) => i * step)}
@@ -355,8 +367,37 @@ function SkillView({
       {skill === "speaking" && <SpeakingImport store={store} />}
 
       <section aria-label="推移" className="rounded-xl border border-border bg-card p-4">
-        <h2 className="mb-2 text-sm font-semibold">バンドスコアの推移</h2>
-        <BandChart data={data} skill={skill} today={today} />
+        <h2 className="mb-2 text-sm font-semibold">バンドスコアの推移{skill === "speaking" && "（Partごと）"}</h2>
+        {skill === "speaking" ? (
+          <div className="grid gap-5 md:grid-cols-3">
+            {parts.map((part) => (
+              <div key={part || "none"}>
+                <h3 className="mb-1 text-xs font-semibold text-muted">{partName(part)}</h3>
+                <LineChart
+                  series={[
+                    {
+                      name: partName(part),
+                      color: "var(--series-1)",
+                      points: records
+                        .filter((r) => partOf(r) === part && r.band != null)
+                        .sort(byOrder)
+                        .map((r) => ({ date: r.date, value: r.band! })),
+                    },
+                  ]}
+                  min={4}
+                  max={9}
+                  ticks={BAND_TICKS}
+                  reference={{ value: data.targets.speaking, label: `目標 ${formatBand(data.targets.speaking)}` }}
+                  format={formatBand}
+                  height="h-28"
+                  today={today}
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <BandChart data={data} skill={skill} today={today} />
+        )}
         {skill === "speaking" && (
           <div className="mt-5 grid gap-5 md:grid-cols-3">
             {metricChart("wpm", "WPM")}
