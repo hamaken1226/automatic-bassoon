@@ -9,6 +9,8 @@ export type CalendarEvent = {
   end: string;
   allDay: boolean;
   location: string;
+  /** カレンダーの名前（複数のカレンダーを見分ける用） */
+  calendar: string;
 };
 
 const MAX_OCCURRENCES = 5000;
@@ -23,6 +25,7 @@ function toDateString(t: ICAL.Time): string {
  */
 export function expandEvents(ics: string, from: string, days: number): CalendarEvent[] {
   const root = new ICAL.Component(ICAL.parse(ics));
+  const calendar = String(root.getFirstPropertyValue("x-wr-calname") ?? "");
   for (const tz of root.getAllSubcomponents("vtimezone")) {
     ICAL.TimezoneService.register(new ICAL.Timezone(tz));
   }
@@ -47,7 +50,7 @@ export function expandEvents(ics: string, from: string, days: number): CalendarE
       // DTEND が無い終日予定は1日分
       const e = end && end.compare(start) > 0 ? toDateString(end) : addDays(s, 1);
       if (s < rangeToDate && e > rangeFromDate) {
-        out.push({ title: item.summary || "（タイトルなし）", start: s, end: e, allDay: true, location: item.location || "" });
+        out.push({ title: item.summary || "（タイトルなし）", start: s, end: e, allDay: true, location: item.location || "", calendar });
       }
       return;
     }
@@ -61,6 +64,7 @@ export function expandEvents(ics: string, from: string, days: number): CalendarE
         end: new Date(e).toISOString(),
         allDay: false,
         location: item.location || "",
+        calendar,
       });
     }
   };
@@ -81,9 +85,19 @@ export function expandEvents(ics: string, from: string, days: number): CalendarE
     }
   }
 
-  return out.sort((a, b) => {
+  return sortEvents(out);
+}
+
+/** 開始の早い順（同じ時刻なら終日予定が先） */
+export function sortEvents(events: CalendarEvent[]): CalendarEvent[] {
+  return [...events].sort((a, b) => {
     const ka = a.allDay ? `${a.start}T00:00:00+09:00` : a.start;
     const kb = b.allDay ? `${b.start}T00:00:00+09:00` : b.start;
     return new Date(ka).getTime() - new Date(kb).getTime() || Number(b.allDay) - Number(a.allDay);
   });
+}
+
+/** 環境変数のURLを1つずつに分ける（改行・カンマ・空白区切り） */
+export function splitCalendarUrls(value: string | undefined): string[] {
+  return [...new Set((value ?? "").split(/[\s,]+/).map((u) => u.trim()).filter((u) => /^https?:\/\//.test(u)))];
 }

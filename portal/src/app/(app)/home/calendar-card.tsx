@@ -6,7 +6,7 @@ import { addDays, formatDateShort, formatTime } from "@/lib/date";
 import type { CalendarEvent } from "@/lib/calendar-parse";
 import { HomeCard, Loading } from "./home-card";
 
-type State = { status: "loading" } | { status: "error"; notConfigured: boolean } | { status: "ok"; from: string; days: number; events: CalendarEvent[] };
+type State = { status: "loading" } | { status: "error"; notConfigured: boolean } | { status: "ok"; from: string; days: number; events: CalendarEvent[]; calendars: number; failed: number };
 
 const DAY_LABELS = ["今日", "明日", "明後日"];
 
@@ -21,8 +21,8 @@ export function CalendarCard() {
           const body = (await res.json().catch(() => ({}))) as { error?: string };
           return setState({ status: "error", notConfigured: body.error === "not_configured" });
         }
-        const body = (await res.json()) as { from: string; days: number; events: CalendarEvent[] };
-        setState({ status: "ok", ...body });
+        const body = (await res.json()) as { from: string; days: number; events: CalendarEvent[]; calendars?: number; failed?: number };
+        setState({ status: "ok", calendars: 1, failed: 0, ...body });
       })
       .catch(() => setState({ status: "error", notConfigured: false }));
   }, []);
@@ -37,6 +37,8 @@ export function CalendarCard() {
           {state.notConfigured && <span className="block text-xs">（GOOGLE_CALENDAR_ICAL_URL が設定されていません）</span>}
         </p>
       ) : (
+        <>
+        {state.failed > 0 && <p className="mb-2 text-xs text-muted">一部のカレンダーを読み込めませんでした</p>}
         <ol className="space-y-2.5">
           {Array.from({ length: state.days }, (_, i) => {
             const day = addDays(state.from, i);
@@ -61,6 +63,7 @@ export function CalendarCard() {
                         </span>
                         <span className="min-w-0 break-words">
                           {e.title}
+                          {state.calendars > 1 && e.calendar && <span className="ml-1.5 text-xs text-muted">［{e.calendar}］</span>}
                           {e.location && (
                             <span className="ml-1.5 inline-flex items-center gap-0.5 text-xs text-muted">
                               <MapPin className="size-3" aria-hidden />
@@ -76,6 +79,7 @@ export function CalendarCard() {
             );
           })}
         </ol>
+        </>
       )}
     </HomeCard>
   );
