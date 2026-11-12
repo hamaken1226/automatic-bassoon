@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { ComingSoon } from "@/components/coming-soon";
+import { TasksApp } from "./tasks-app";
 
 export const metadata: Metadata = { title: "タスク" };
 
 export default function Page() {
-  return <ComingSoon title="タスク" phase={2} />;
+  return <TasksApp />;
 }

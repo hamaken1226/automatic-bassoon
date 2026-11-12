@@ -10,6 +10,8 @@
   --accent-foreground: #ffffff;
   --accent-soft: #e4f0ec;
   --danger: #b3382c;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -23,6 +25,8 @@
     --accent-foreground: #10201b;
     --accent-soft: #1f302b;
     --danger: #e58378;
+    --series-1: #3987e5;
+    --series-2: #d95926;
   }
 }
 
@@ -44,4 +48,31 @@
 body {
   background: var(--background);
   color: var(--foreground);
+}
+
+/* メモの背景色（カードごとに選べる）。未指定は --card */
+[data-note-color="red"] { --note-bg: #fbe1dd; }
+[data-note-color="orange"] { --note-bg: #fde7cf; }
+[data-note-color="yellow"] { --note-bg: #fbf3c4; }
+[data-note-color="green"] { --note-bg: #dff0d8; }
+[data-note-color="teal"] { --note-bg: #d5efec; }
+[data-note-color="blue"] { --note-bg: #dbe8fb; }
+[data-note-color="purple"] { --note-bg: #e9defa; }
+[data-note-color="pink"] { --note-bg: #fbdeea; }
+[data-note-color="gray"] { --note-bg: #e8e8e4; }
+
+@media (prefers-color-scheme: dark) {
+  [data-note-color="red"] { --note-bg: #5a2a26; }
+  [data-note-color="orange"] { --note-bg: #5c3a17; }
+  [data-note-color="yellow"] { --note-bg: #554a14; }
+  [data-note-color="green"] { --note-bg: #27462a; }
+  [data-note-color="teal"] { --note-bg: #17443f; }
+  [data-note-color="blue"] { --note-bg: #1f3a5c; }
+  [data-note-color="purple"] { --note-bg: #3d2a5c; }
+  [data-note-color="pink"] { --note-bg: #5a2440; }
+  [data-note-color="gray"] { --note-bg: #3a3a37; }
+}
+
+.note-surface {
+  background: var(--note-bg, var(--card));
 }

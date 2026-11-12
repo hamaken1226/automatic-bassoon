@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NAV_ITEMS, isActive } from "@/lib/nav";
+import { NoteTagNav } from "./note-tag-nav";
 
 /** PC用: 左のサイドメニュー */
 export function SideNav() {
@@ -26,6 +27,11 @@ export function SideNav() {
               <Icon className="size-4 shrink-0" aria-hidden />
               {item.label}
             </Link>
+            {item.href === "/notes" && active && (
+              <div className="my-1 ml-5 border-l border-border pl-3">
+                <NoteTagNav />
+              </div>
+            )}
             {item.children && active && (
               <div className="my-1 ml-5 flex flex-col gap-0.5 border-l border-border pl-3">
                 {item.children.map((child) => {
